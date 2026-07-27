@@ -64,7 +64,7 @@ Menu **AeroTerra ▸ Bootstrap Project**. This generates:
 
 Open `Assets/Scenes/MainMenu.unity` → **Play**.
 Main menu → Free Flight → London/Dubai → pick a drone → fly.
-Default keys: `W/S` throttle, `A/D` yaw, arrows pitch/roll, `C` camera, `R` reset, `Esc` pause.
+Default keys: arrows throttle, `W/S` pitch, `A/D` roll (no keyboard yaw), `C` camera, `R` reset, `Esc` pause. Full reference: `docs/05-CONTROLS.md`.
 
 ## 8. Daily workflow
 

@@ -222,10 +222,10 @@ Common notation used throughout:
 
 | Axis / action | Meaning | Range | Centred behaviour |
 |---|---|---|---|
-| **Throttle** (W/S, LS-Y) | Commanded **climb rate** | ±`MaxAscentRateMs` | Altitude hold — the controller solves for hover thrust automatically |
-| **Pitch** (↑/↓, RS-Y) | Commanded **forward/back lean angle** | ±`MaxTiltDeg` | Levels, then arrests horizontal drift (position hold) |
-| **Roll** (←/→, RS-X) | Commanded **lateral lean angle** | ±`MaxTiltDeg` | as above |
-| **Yaw** (A/D, LS-X) | Commanded **yaw rate**, integrated into a heading target | ±`YawRateDegS` | Holds the last commanded heading against wind and torque |
+| **Throttle** (↑/↓, LS-Y) | Commanded **climb rate** | ±`MaxAscentRateMs` | Altitude hold — the controller solves for hover thrust automatically |
+| **Pitch** (W/S, RS-Y) | Commanded **forward/back lean angle** | ±`MaxTiltDeg` | Levels, then arrests horizontal drift (position hold) |
+| **Roll** (A/D, RS-X) | Commanded **lateral lean angle** | ±`MaxTiltDeg` | as above |
+| **Yaw** (gamepad LS-X only — no keyboard binding) | Commanded **yaw rate**, integrated into a heading target | ±`YawRateDegS` | Holds the last commanded heading against wind and torque |
 | **Boost** (LShift/RT) | Raises tilt limit ×1.4, thrust ceiling ×1.3, climb rate ×1.3 | — | — |
 | **Brake** (Space/LT) | Levels attitude and applies a hard horizontal air-anchor | — | — |
 
@@ -331,10 +331,10 @@ that no other model in the game can produce, and it makes fast vertical descents
 
 | Axis / action | Meaning | Range | Centred behaviour |
 |---|---|---|---|
-| **Throttle** (W/S, LS-Y) | **Trims a persistent power setting** — press and release to change it, it stays | 12 – 100 % (`IdleThrottle` … 1) | Holds the set power. *Never* returns to zero. |
-| **Pitch** (↑/↓, RS-Y) | **Elevator**: commands angle of attack (equivalently, load factor) | ±`α_max` | Stability augmentation trims to level cruise (~2° nose up) |
-| **Roll** (←/→, RS-X) | **Aileron**: commands roll *rate* | ±`RollRateDegS` | Wing leveller rolls back to φ = 0 |
-| **Yaw** (A/D, LS-X) | **Rudder**: sideslip / crosswind correction | ±`YawRateDegS` | Auto-coordination cancels residual sideslip |
+| **Throttle** (↑/↓, LS-Y) | **Trims a persistent power setting** — press and release to change it, it stays | 12 – 100 % (`IdleThrottle` … 1) | Holds the set power. *Never* returns to zero. |
+| **Pitch** (W/S, RS-Y) | **Elevator**: commands angle of attack (equivalently, load factor) | ±`α_max` | Stability augmentation trims to level cruise (~2° nose up) |
+| **Roll** (A/D, RS-X) | **Aileron**: commands roll *rate* | ±`RollRateDegS` | Wing leveller rolls back to φ = 0 |
+| **Yaw** (gamepad LS-X only — no keyboard binding) | **Rudder**: sideslip / crosswind correction | ±`YawRateDegS` | Auto-coordination cancels residual sideslip |
 | **Boost** | Military / overspeed power: thrust ×1.3, doubled fuel burn | — | — |
 | **Brake** | **Spoilers + flaps**: `Cd0` ×2.2, `CL_max` ×1.15, `α_stall` −3° | — | — |
 
@@ -569,10 +569,10 @@ loitering, no going around. That single constraint is what produces the model's 
 
 | Axis / action | Meaning | Notes |
 |---|---|---|
-| **Throttle** (W/S) | **Commit / motor arm** — full forward for ≥ 0.4 s ignites BOOST | Not a proportional axis. A rocket motor is lit or it isn't. |
-| **Pitch** (↑/↓) | Pitch **rate** command via thrust-vectoring + fins | Authority = `TVC_authority·(thrust/T_max) + fin_authority·q/q_ref` |
-| **Roll** (←/→) | Roll **rate** command | Heavily damped; the airframe actively holds wings level (`RollHoldStiffness`) so the seeker view stays stable |
-| **Yaw** (A/D) | Yaw rate command | Same authority curve as pitch |
+| **Throttle** (↑/↓) | **Commit / motor arm** — full forward for ≥ 0.4 s ignites BOOST | Not a proportional axis. A rocket motor is lit or it isn't. |
+| **Pitch** (W/S) | Pitch **rate** command via thrust-vectoring + fins | Authority = `TVC_authority·(thrust/T_max) + fin_authority·q/q_ref` |
+| **Roll** (A/D) | Roll **rate** command | Heavily damped; the airframe actively holds wings level (`RollHoldStiffness`) so the seeker view stays stable |
+| **Yaw** (gamepad only — no keyboard binding) | Yaw rate command | Same authority curve as pitch |
 | **Boost** (LShift) | **Terminal sprint** — one-shot, dumps remaining propellant for ~2.5 s at 140 % thrust | Consumed once. HUD shows availability. |
 | **Brake** (Space) | **Drag flaps** — `Cd` ×2.5, no lift change | The only way to shed speed for a tight terminal correction; costs energy you cannot get back |
 

@@ -607,36 +607,116 @@ namespace AeroTerra.UI
         }
 
         // ---------------- KEY BINDINGS ----------------
+
+        /// <summary>Friendly per-action display name — action.name is the internal
+        /// PascalCase InputAction identifier (e.g. "PayloadDrop", "SmokeScreen"), not
+        /// something to show the player directly.</summary>
+        private static string FriendlyActionName(string actionName) => actionName switch
+        {
+            "PayloadDrop" => "PAYLOAD DROP",
+            "SmokeScreen" => "SMOKE SCREEN",
+            "PhotoMode" => "PHOTO MODE",
+            _ => actionName.ToUpperInvariant(),
+        };
+
+        /// <summary>Label for one binding slot of a composite axis (Throttle/Pitch/Roll)
+        /// — e.g. "PITCH FORWARD", "PITCH FORWARD (ALT)" for Q, the extra key stacked
+        /// onto the same composite part alongside W (see InputManager.BuildActions).
+        /// occurrence counts how many bindings this part name has had so far on this
+        /// action — 0 is the primary (and the only one actually rebindable through this
+        /// screen, see BuildKeyBindings' remarks), anything past that is a fixed
+        /// alternate.</summary>
+        private static string AxisSlotLabel(string actionName, bool positive, int occurrence)
+        {
+            string dir = (actionName, positive) switch
+            {
+                ("Throttle", true) => "UP",
+                ("Throttle", false) => "DOWN",
+                ("Pitch", true) => "FORWARD",
+                ("Pitch", false) => "BACK",
+                ("Roll", true) => "RIGHT",
+                ("Roll", false) => "LEFT",
+                _ => positive ? "POSITIVE" : "NEGATIVE",
+            };
+            return occurrence > 0
+                ? $"{FriendlyActionName(actionName)} {dir} (ALT)"
+                : $"{FriendlyActionName(actionName)} {dir}";
+        }
+
+        /// <summary>Every player-facing keyboard binding slot across every rebindable
+        /// action — one row per actual keyboard control, not one row per InputAction.
+        /// A plain button action (Camera, Reset, …) contributes exactly one slot; an
+        /// axis composite (Throttle/Pitch/Roll) contributes one slot per keyboard part
+        /// binding, so both directions show up (the old version only ever showed the
+        /// first — "Positive" — half of each axis). Yaw has no keyboard binding at all
+        /// (see InputManager.BuildActions) so it contributes zero slots and simply
+        /// never appears here.</summary>
+        private static System.Collections.Generic.List<(string label, InputAction action, int bindingIndex)>
+            KeyBindingSlots(InputAction[] actions)
+        {
+            var rows = new System.Collections.Generic.List<(string, InputAction, int)>();
+            foreach (var action in actions)
+            {
+                int positiveSeen = 0, negativeSeen = 0;
+                for (int i = 0; i < action.bindings.Count; i++)
+                {
+                    var b = action.bindings[i];
+                    if (b.isComposite) continue; // the composite's own header row, not a real binding
+                    if (!b.isPartOfComposite && !b.path.StartsWith("<Keyboard>")) continue; // gamepad-only binding
+
+                    if (b.isPartOfComposite)
+                    {
+                        bool positive = string.Equals(b.name, "Positive", System.StringComparison.OrdinalIgnoreCase);
+                        int occurrence = positive ? positiveSeen++ : negativeSeen++;
+                        rows.Add((AxisSlotLabel(action.name, positive, occurrence), action, i));
+                    }
+                    else
+                    {
+                        rows.Add((FriendlyActionName(action.name), action, i));
+                    }
+                }
+            }
+            return rows;
+        }
+
         private void BuildKeyBindings()
         {
             Label(_content, "KEY BINDINGS", 22, new Vector2(0.04f, 0.88f), new Vector2(0.6f, 0.97f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
-            Label(_content, "Click a binding to rebind it. Pause (Esc) is fixed and cannot be changed.", 16,
-                  new Vector2(0.04f, 0.81f), new Vector2(0.96f, 0.87f), TextDim);
+            Label(_content, "Click a binding to rebind it. Pause (Esc) is fixed. (ALT) keys are fixed alternates, not independently rebindable.", 14,
+                  new Vector2(0.04f, 0.80f), new Vector2(0.96f, 0.87f), TextDim);
 
             var im = AeroTerra.Input.InputManager.Instance;
             if (im == null) return;
 
             var actions = im.AllActions().Where(a => a != im.PauseAction).ToArray();
-            const int cols = 2;
+            var rows = KeyBindingSlots(actions);
+
+            const int cols = 3;
             float colW = 0.92f / cols;
-            // 10 rebindable actions → 5 rows; keep the last row clear of the
-            // RESET ALL BINDINGS button anchored at the bottom.
-            const float rowH = 0.125f;
-            for (int i = 0; i < actions.Length; i++)
+            const float rowH = 0.095f, rowsTop = 0.745f, rowsBottom = 0.16f;
+            int rowsPerCol = Mathf.Max(1, Mathf.FloorToInt((rowsTop - rowsBottom) / rowH));
+            for (int i = 0; i < rows.Count; i++)
             {
-                int col = i % cols, row = i / cols;
-                float x0 = 0.04f + col * colW, x1 = x0 + colW - 0.03f;
-                float yTop = 0.72f - row * rowH;
-                var action = actions[i];
-                int bindingIndex = FirstKeyboardBinding(action);
+                int col = i / rowsPerCol, row = i % rowsPerCol;
+                if (col >= cols)
+                {
+                    // Overflowed the grid (shouldn't happen at the current action count,
+                    // but fail visibly-safe rather than silently drop rows off-screen).
+                    Label(_content, $"+{rows.Count - i} more…", 12,
+                          new Vector2(0.04f, rowsBottom - 0.03f), new Vector2(0.5f, rowsBottom), TextDim);
+                    break;
+                }
+                float x0 = 0.04f + col * colW, x1 = x0 + colW - 0.02f;
+                float yTop = rowsTop - row * rowH;
+                var (label, action, bindingIndex) = rows[i];
                 string display = action.GetBindingDisplayString(bindingIndex);
 
-                Label(_content, action.name.ToUpperInvariant(), 18, new Vector2(x0, yTop), new Vector2(x1, yTop + 0.055f),
+                Label(_content, label, 12, new Vector2(x0, yTop), new Vector2(x1, yTop + 0.032f),
                       TextMain, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
                 var a = action; var bi = bindingIndex;
-                Button_(_content, display, new Vector2(x0, yTop - 0.065f), new Vector2(x1, yTop),
-                        () => StartRebind(a, bi), PanelAlt, 18);
+                Button_(_content, display, new Vector2(x0, yTop - 0.048f), new Vector2(x1, yTop - 0.005f),
+                        () => StartRebind(a, bi), PanelAlt, 14);
             }
 
             Button_(_content, "RESET ALL BINDINGS", new Vector2(0.04f, 0.06f), new Vector2(0.4f, 0.14f), () =>
@@ -646,17 +726,6 @@ namespace AeroTerra.UI
                 GameManager.Instance.SaveSettings();
                 Build();
             }, AccentWarn, 18);
-        }
-
-        private static int FirstKeyboardBinding(InputAction action)
-        {
-            for (int i = 0; i < action.bindings.Count; i++)
-            {
-                var b = action.bindings[i];
-                if (!b.isComposite && (b.isPartOfComposite || b.path.StartsWith("<Keyboard>")))
-                    return i;
-            }
-            return 0;
         }
 
         private void StartRebind(InputAction action, int bindingIndex)

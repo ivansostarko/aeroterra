@@ -56,28 +56,38 @@ namespace AeroTerra.Input
 
         private void BuildActions()
         {
-            // Throttle: W/S, gamepad left stick Y, arrows
+            // Throttle: Up/Down arrows, gamepad left stick Y
             ThrottleAction = new InputAction("Throttle", InputActionType.Value);
             ThrottleAction.AddCompositeBinding("1DAxis")
-                .With("Positive", "<Keyboard>/w").With("Negative", "<Keyboard>/s");
+                .With("Positive", "<Keyboard>/upArrow").With("Negative", "<Keyboard>/downArrow");
             ThrottleAction.AddBinding("<Gamepad>/leftStick/y");
 
-            // Pitch: Up/Down arrows, gamepad right stick Y, mouse Y (scheme-gated in ReadFlightAxes)
+            // Pitch ("fly forward/back"): W/S, plus Q as an extra alternate "forward" key
+            // stacked onto the same Positive part (Unity's composite parts accept more
+            // than one bound control — same "WASD + arrows both move" pattern, just Q
+            // added onto Positive instead of a whole second key pair). Gamepad right
+            // stick Y, mouse Y (scheme-gated in ReadFlightAxes) unchanged.
             PitchAction = new InputAction("Pitch", InputActionType.Value);
             PitchAction.AddCompositeBinding("1DAxis")
-                .With("Positive", "<Keyboard>/upArrow").With("Negative", "<Keyboard>/downArrow");
+                .With("Positive", "<Keyboard>/w").With("Negative", "<Keyboard>/s")
+                .With("Positive", "<Keyboard>/q");
             PitchAction.AddBinding("<Gamepad>/rightStick/y");
 
-            // Roll: Left/Right arrows, gamepad right stick X
+            // Roll ("fly left/right"): A/D, plus K as an extra alternate "right" key,
+            // same stacked-part pattern as Pitch's Q above. Gamepad right stick X unchanged.
             RollAction = new InputAction("Roll", InputActionType.Value);
             RollAction.AddCompositeBinding("1DAxis")
-                .With("Positive", "<Keyboard>/rightArrow").With("Negative", "<Keyboard>/leftArrow");
+                .With("Positive", "<Keyboard>/d").With("Negative", "<Keyboard>/a")
+                .With("Positive", "<Keyboard>/k");
             RollAction.AddBinding("<Gamepad>/rightStick/x");
 
-            // Yaw: A/D, gamepad left stick X
+            // Yaw: gamepad-only now — this control scheme has no keyboard left/right
+            // yaw at all (removed per design). Multirotor/VTOL heading rotation is only
+            // player-commandable on gamepad as a result; fixed-wing turning is
+            // unaffected (it turns via bank-to-turn coordination, not yaw — see
+            // DroneFlightController.TickFixedWing). Kept as a real InputAction (not
+            // deleted) so gamepad/AllActions()/ReadFlightAxes don't need special-casing.
             YawAction = new InputAction("Yaw", InputActionType.Value);
-            YawAction.AddCompositeBinding("1DAxis")
-                .With("Positive", "<Keyboard>/d").With("Negative", "<Keyboard>/a");
             YawAction.AddBinding("<Gamepad>/leftStick/x");
 
             PauseAction = new InputAction("Pause", InputActionType.Button, "<Keyboard>/escape");
@@ -117,10 +127,10 @@ namespace AeroTerra.Input
             ReplayAction.AddBinding("<Gamepad>/dpad/up");
 
             // Photo mode: detached free-fly camera (see DroneCameraRig.CamMode.Photo) —
-            // "O" for "phOto," not part of the C-cycle so it can't be accidentally cycled
-            // into mid-flight; dpad/down is the one face of the pad Replay's dpad/up
-            // hasn't claimed.
-            PhotoModeAction = new InputAction("PhotoMode", InputActionType.Button, "<Keyboard>/o");
+            // F8, not part of the C-cycle so it can't be accidentally cycled into
+            // mid-flight; dpad/down is the one face of the pad Replay's dpad/up hasn't
+            // claimed.
+            PhotoModeAction = new InputAction("PhotoMode", InputActionType.Button, "<Keyboard>/f8");
             PhotoModeAction.AddBinding("<Gamepad>/dpad/down");
 
             foreach (var a in AllActions()) a.Enable();

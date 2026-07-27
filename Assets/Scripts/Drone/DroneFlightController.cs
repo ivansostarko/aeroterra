@@ -284,6 +284,10 @@ namespace AeroTerra.Drone
 
             // Yaw is a rate command integrated into a target heading, so the drone
             // holds heading when the stick is released instead of weather-vaning.
+            // Keyboard has no yaw binding at all (InputManager.BuildActions) — keyboard
+            // pilots fly multirotor/VTOL airframes at a fixed heading, only ever
+            // re-oriented by external forces (see the resync clause just below).
+            // Gamepad still yaws normally via the left stick's X axis.
             float yawRateDeg = 70f + Spec.YawTorque * 8f;
             _headingDeg += axes.Yaw * yawRateDeg * dt;
             _headingDeg = Mathf.Repeat(_headingDeg, 360f);

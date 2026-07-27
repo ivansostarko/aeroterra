@@ -37,27 +37,19 @@ namespace AeroTerra.Workshop
             ? new Color(Working.BodyR, Working.BodyG, Working.BodyB)
             : CurrentSpec.DefaultBodyColor;
 
-        /// <summary>Whether the payload model (cargo pod / munitions) is shown on the stage.</summary>
-        public bool ShowPayload { get; private set; } = true;
-
         /// <summary>Bounding radius of the current display model — used by the UI to frame the camera.</summary>
         public float ModelRadius { get; private set; } = 1f;
 
-        /// <summary>True when the current model actually has a payload visual to toggle.</summary>
-        public bool HasPayloadVisual =>
-            _model != null && Procedural.DroneFactory.FindDeep(_model.transform, "PayloadVisual") != null;
-
-        public void SetShowPayload(bool show)
-        {
-            ShowPayload = show;
-            ApplyPayloadVisual();
-        }
-
+        /// <summary>The payload model (cargo pod / munitions) is shown on the stage whenever
+        /// a nonzero payload weight is selected, hidden at 0 kg — no separate player-facing
+        /// toggle, this is purely derived from Working.PayloadKg. Called from Rebuild() and
+        /// from SetPayload() (so picking a new weight updates the model immediately without
+        /// waiting for a full rebuild).</summary>
         private void ApplyPayloadVisual()
         {
             if (_model == null) return;
             var pv = Procedural.DroneFactory.FindDeep(_model.transform, "PayloadVisual");
-            if (pv != null) pv.gameObject.SetActive(ShowPayload);
+            if (pv != null) pv.gameObject.SetActive(Working.PayloadKg > 0f);
         }
 
         /// <summary>Every drone in the game, sorted by name — no hardcoded roster.</summary>
@@ -158,7 +150,11 @@ namespace AeroTerra.Workshop
 
         public void SetBattery(float wh) => Working.BatteryWh = wh;
         public void SetFuel(float litres) => Working.FuelL = litres;
-        public void SetPayload(float kg) => Working.PayloadKg = kg;
+        public void SetPayload(float kg)
+        {
+            Working.PayloadKg = kg;
+            ApplyPayloadVisual();
+        }
         public void SetSmokeScreen(bool equipped) => Working.SmokeScreenEquipped = equipped;
         public void SetComms(Drone.CommsType comms) => Working.Comms = comms;
 

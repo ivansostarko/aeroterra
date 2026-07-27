@@ -125,8 +125,18 @@ namespace AeroTerra.UI
             // AudioSource.ignoreListenerPause (see AudioManager.EnsureUiSfxLoaded), so
             // menu navigation still has audio feedback.
             AudioListener.pause = _paused;
-            if (_paused) { ShowPauseMenu(); CustomCursor.Apply(); }
-            else { if (_pausePanel != null) Destroy(_pausePanel.gameObject); CustomCursor.Reset(); }
+            if (_paused)
+            {
+                ShowPauseMenu();
+                CustomCursor.Apply();
+                AudioManager.Instance?.PlayPauseMenuMusic();
+            }
+            else
+            {
+                if (_pausePanel != null) Destroy(_pausePanel.gameObject);
+                CustomCursor.Reset();
+                AudioManager.Instance?.StopPauseMenuMusic();
+            }
         }
 
         /// <summary>End-of-flight modal: the drone ran out of power and touched down.
@@ -180,6 +190,7 @@ namespace AeroTerra.UI
             {
                 Time.timeScale = 1f;
                 AudioListener.pause = false; // this bypasses TogglePause(), which would otherwise do it
+                AudioManager.Instance?.StopPauseMenuMusic(); // ditto — TogglePause() isn't called here either
                 _flightLog?.Flush();
                 GameManager.Instance.ReturnToMenu();
             }, AccentWarn, 24);

@@ -1,6 +1,7 @@
 using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using AeroTerra.Core;
 using static AeroTerra.UI.UIBuilder;
 
@@ -19,6 +20,7 @@ namespace AeroTerra.UI
         private RectTransform _root;
         private System.Action _onBack;
         private int _tab; // 0 = screenshots, 1 = recordings
+        private string _pendingDeletePng, _pendingDeleteJson; // non-null while the delete-confirm modal is up
 
         private Canvas Canvas => GetComponent<MainMenuUI>().Canvas;
 
@@ -26,6 +28,8 @@ namespace AeroTerra.UI
         {
             _onBack = onBack;
             _tab = 0;
+            _pendingDeletePng = null;
+            _pendingDeleteJson = null;
             Build();
         }
 
@@ -65,6 +69,8 @@ namespace AeroTerra.UI
             var content = Panel_(_root, "Content", Color.clear, new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.80f));
             if (_tab == 0) BuildScreenshotsTab(content);
             else BuildRecordingsTab(content);
+
+            if (_pendingDeletePng != null) BuildDeleteConfirmOverlay();
         }
 
         // ---------------------------------------------------------------- screenshots
@@ -107,6 +113,8 @@ namespace AeroTerra.UI
 
         private void BuildScreenshotRow(Transform content, string pngPath, float topY, float height)
         {
+            string jsonPath = Path.ChangeExtension(pngPath, ".json");
+
             var row = Panel_(content, "Shot_" + Path.GetFileNameWithoutExtension(pngPath), Panel,
                              new Vector2(0f, 1f), new Vector2(1f, 1f),
                              new Vector2(0f, -(topY + height)), new Vector2(0f, -topY));
@@ -122,8 +130,8 @@ namespace AeroTerra.UI
                 rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
                 imgGo.GetComponent<RawImage>().texture = tex;
             }
+            BuildImageContextMenu(row, thumbArea, pngPath, jsonPath);
 
-            string jsonPath = Path.ChangeExtension(pngPath, ".json");
             ScreenshotMeta meta = null;
             if (File.Exists(jsonPath))
             {
@@ -140,8 +148,154 @@ namespace AeroTerra.UI
             Label(row, caption, 13, new Vector2(0.30f, 0.10f), new Vector2(0.90f, 0.70f), TextDim,
                   TMPro.TextAlignmentOptions.MidlineLeft);
 
-            Button_(row, "DELETE", new Vector2(0.905f, 0.30f), new Vector2(0.995f, 0.70f),
-                    () => DeleteScreenshot(pngPath, jsonPath), AccentWarn, 12);
+            BuildDeleteIconButton(row, new Vector2(0.905f, 0.30f), new Vector2(0.995f, 0.70f),
+                    () => { _pendingDeletePng = pngPath; _pendingDeleteJson = jsonPath; Build(); });
+        }
+
+        /// <summary>Right-click on the thumbnail opens a small popup with "LOCATE IN
+        /// FOLDER" / "DELETE" — same self-contained catcher+popup pattern
+        /// UIBuilder.Dropdown_ uses (no top-level Build() needed to show/hide it,
+        /// except for Delete, which stages the confirm overlay — see
+        /// BuildDeleteConfirmOverlay).</summary>
+        private void BuildImageContextMenu(Transform row, Transform imageArea, string pngPath, string jsonPath)
+        {
+            RectTransform ctxMenu = null;
+            GameObject ctxCatcher = null;
+
+            void CloseCtx()
+            {
+                if (ctxMenu != null) { Destroy(ctxMenu.gameObject); ctxMenu = null; }
+                if (ctxCatcher != null) { Destroy(ctxCatcher); ctxCatcher = null; }
+            }
+
+            void OpenCtx()
+            {
+                if (ctxMenu != null) { CloseCtx(); return; }
+
+                var catcherRt = Panel_(row, "CtxCatcher", Color.clear, Vector2.zero, Vector2.one);
+                ctxCatcher = catcherRt.gameObject;
+                var catchBtn = catcherRt.gameObject.AddComponent<Button>();
+                catchBtn.transition = Selectable.Transition.None;
+                catchBtn.onClick.AddListener(CloseCtx);
+
+                ctxMenu = Panel_(row, "CtxMenu", PanelAlt, new Vector2(0.01f, 0.06f), new Vector2(0.28f, 0.60f));
+                Button_(ctxMenu, "LOCATE IN FOLDER", new Vector2(0f, 0.52f), new Vector2(1f, 1f),
+                        () => { LocateInFolder(pngPath); CloseCtx(); }, PanelAlt, 10);
+                Button_(ctxMenu, "DELETE", new Vector2(0f, 0f), new Vector2(1f, 0.48f),
+                        () => { _pendingDeletePng = pngPath; _pendingDeleteJson = jsonPath; Build(); }, AccentWarn, 10);
+            }
+
+            var trigger = imageArea.gameObject.AddComponent<EventTrigger>();
+            var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
+            entry.callback.AddListener(data =>
+            {
+                if (((PointerEventData)data).button == PointerEventData.InputButton.Right) OpenCtx();
+            });
+            trigger.triggers.Add(entry);
+        }
+
+        /// <summary>Opens the OS file browser with the file pre-selected where possible
+        /// (Windows Explorer, macOS Finder); falls back to just opening the containing
+        /// folder elsewhere. No existing pattern for this in the codebase to follow —
+        /// Application.OpenURL elsewhere is only ever used for http(s) attribution
+        /// links — so this is a new, self-contained usage.</summary>
+        private static void LocateInFolder(string filePath)
+        {
+            try
+            {
+#if UNITY_STANDALONE_WIN
+                System.Diagnostics.Process.Start("explorer.exe", "/select,\"" + filePath.Replace('/', '\\') + "\"");
+#elif UNITY_STANDALONE_OSX
+                System.Diagnostics.Process.Start("open", "-R \"" + filePath + "\"");
+#else
+                Application.OpenURL("file://" + Path.GetDirectoryName(filePath));
+#endif
+            }
+            catch (System.Exception e) { Debug.LogWarning($"[MediaUI] locate in folder failed: {e.Message}"); }
+        }
+
+        private static Texture2D _deleteIconCache;
+        private static bool _deleteIconChecked;
+
+        /// <summary>Loads Assets/Resources/Images/ui/Menu/delete-icon.png once and
+        /// caches it; returns null (silently) if the icon hasn't been imported yet,
+        /// same fallback spirit as UIBuilder.BackButton_ / WorkshopUI's identical
+        /// helper (duplicated locally — that one's private to WorkshopUI).</summary>
+        private static Texture2D LoadDeleteIcon()
+        {
+            if (!_deleteIconChecked)
+            {
+                _deleteIconChecked = true;
+                _deleteIconCache = Resources.Load<Texture2D>("Images/ui/Menu/delete-icon");
+            }
+            return _deleteIconCache;
+        }
+
+        /// <summary>Icon-only delete button — falls back to a plain "✕" text button if
+        /// delete-icon.png hasn't been imported yet. Doesn't delete on click; it only
+        /// stages _pendingDeletePng/Json and rebuilds to show the confirm overlay.</summary>
+        private void BuildDeleteIconButton(Transform parent, Vector2 anchorMin, Vector2 anchorMax, System.Action onClick)
+        {
+            var icon = LoadDeleteIcon();
+            if (icon == null) { Button_(parent, "✕", anchorMin, anchorMax, onClick, AccentWarn, 14); return; }
+
+            var rt = Panel_(parent, "DeleteBtn", AccentWarn, anchorMin, anchorMax, new Vector2(4, 4), new Vector2(-4, -4));
+            var iconGo = new GameObject("Icon", typeof(RawImage));
+            iconGo.transform.SetParent(rt, false);
+            var iconRt = (RectTransform)iconGo.transform;
+            iconRt.anchorMin = new Vector2(0.24f, 0.22f); iconRt.anchorMax = new Vector2(0.76f, 0.78f);
+            iconRt.offsetMin = Vector2.zero; iconRt.offsetMax = Vector2.zero;
+            iconGo.GetComponent<RawImage>().texture = icon;
+
+            var btn = rt.gameObject.AddComponent<Button>();
+            btn.targetGraphic = rt.GetComponent<Image>();
+            var colors = btn.colors;
+            colors.highlightedColor = new Color(1.15f, 1.15f, 1.15f, 1f);
+            colors.pressedColor = new Color(0.7f, 0.15f, 0.05f, 1f);
+            btn.colors = colors;
+            btn.onClick.AddListener(() => { AudioManager.Instance?.PlayButtonClick(); onClick?.Invoke(); });
+            var trigger = rt.gameObject.AddComponent<EventTrigger>();
+            var hover = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+            hover.callback.AddListener(_ => AudioManager.Instance?.PlayButtonHover());
+            trigger.triggers.Add(hover);
+        }
+
+        /// <summary>Confirmation modal for deleting a screenshot — set
+        /// _pendingDeletePng/Json then Build() to show it, null them out (Cancel/Delete)
+        /// then Build() to dismiss. Same shape as WorkshopUI's BuildDeleteConfirmOverlay.</summary>
+        private void BuildDeleteConfirmOverlay()
+        {
+            var overlay = Panel_(_root, "DeleteConfirm", new Color(0, 0, 0, 0.75f), Vector2.zero, Vector2.one);
+            var box = Panel_(overlay, "Box", Panel, new Vector2(0.32f, 0.36f), new Vector2(0.68f, 0.64f));
+
+            var icon = LoadDeleteIcon();
+            if (icon != null)
+            {
+                var iconGo = new GameObject("Icon", typeof(RawImage));
+                iconGo.transform.SetParent(box, false);
+                var iconRt = (RectTransform)iconGo.transform;
+                iconRt.anchorMin = new Vector2(0.42f, 0.66f); iconRt.anchorMax = new Vector2(0.58f, 0.90f);
+                iconRt.offsetMin = Vector2.zero; iconRt.offsetMax = Vector2.zero;
+                iconGo.GetComponent<RawImage>().texture = icon;
+            }
+
+            Label(box, $"DELETE “{Path.GetFileName(_pendingDeletePng)}”?", 16, new Vector2(0.05f, 0.42f), new Vector2(0.95f, 0.60f),
+                  TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            Label(box, "This screenshot will be permanently deleted. This can't be undone.", 12,
+                  new Vector2(0.08f, 0.28f), new Vector2(0.92f, 0.40f), TextDim, TMPro.TextAlignmentOptions.Center);
+
+            Button_(box, "CANCEL", new Vector2(0.08f, 0.08f), new Vector2(0.46f, 0.24f),
+                    () => { _pendingDeletePng = null; _pendingDeleteJson = null; Build(); }, PanelAlt, 14);
+            Button_(box, "DELETE", new Vector2(0.54f, 0.08f), new Vector2(0.92f, 0.24f), () =>
+            {
+                // Null out BEFORE deleting — DeleteScreenshot() ends with its own
+                // Build(), and that rebuild must not see a still-pending delete for a
+                // file that's already gone (which would just re-show this same modal).
+                string png = _pendingDeletePng, json = _pendingDeleteJson;
+                _pendingDeletePng = null;
+                _pendingDeleteJson = null;
+                DeleteScreenshot(png, json);
+            }, AccentWarn, 14);
         }
 
         private static Texture2D LoadThumbnail(string path)

@@ -84,7 +84,7 @@ namespace AeroTerra.UI
 
             BuildPhotoModeOverlay();
 
-            SetCameraMode(CamMode.Chase);
+            SetCameraMode(CamMode.ChaseDefault);
             SetVisible(GameManager.Instance.Settings.ShowHud);
             ApplyHudElementSettings();
         }
@@ -95,7 +95,7 @@ namespace AeroTerra.UI
             Panel_(top, "BottomBorder", Accent, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, -2), new Vector2(0, 0));
 
             Label(top, _flight.Spec.DisplayName, 22, new Vector2(0.02f, 0), new Vector2(0.35f, 1), TextMain);
-            _camModeLabel = Label(top, "CHASE", 22, new Vector2(0.35f, 0), new Vector2(0.65f, 1),
+            _camModeLabel = Label(top, "CHASE DEFAULT", 22, new Vector2(0.35f, 0), new Vector2(0.65f, 1),
                                   Accent, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
             _payloadLabel = Label(top, "", 20, new Vector2(0.65f, 0), new Vector2(0.98f, 1),
                                   TextDim, TMPro.TextAlignmentOptions.Right);
@@ -456,7 +456,7 @@ namespace AeroTerra.UI
                   Accent, TMPro.TextAlignmentOptions.MidlineLeft, TMPro.FontStyles.Bold);
             _photoReadout = Label(_photoPanel, "", 13, new Vector2(0.03f, 0.05f), new Vector2(0.30f, 0.50f),
                                   TextDim, TMPro.TextAlignmentOptions.MidlineLeft);
-            Label(_photoPanel, "RMB LOOK · WASD MOVE · Q/E UP-DOWN · SHIFT FAST · [ ] FOV · − = EXPOSURE · O EXIT",
+            Label(_photoPanel, "RMB LOOK · WASD MOVE · Q/E UP-DOWN · SHIFT FAST · [ ] FOV · − = EXPOSURE · F8 EXIT",
                   11, new Vector2(0.32f, 0f), new Vector2(0.98f, 1f), TextDim, TMPro.TextAlignmentOptions.MidlineLeft);
             _photoPanel.gameObject.SetActive(false);
         }
@@ -477,14 +477,15 @@ namespace AeroTerra.UI
         {
             _camModeLabel.text = mode switch
             {
+                CamMode.ChaseDetails => "CHASE DETAILS",
                 CamMode.Front => "FRONT",
                 CamMode.Bottom => "BOTTOM — SURVEILLANCE",
                 CamMode.Thermal => "THERMAL",
                 CamMode.Photo => "PHOTO",
-                _ => "CHASE",
+                _ => "CHASE DEFAULT",
             };
 
-            bool showReticle = mode != CamMode.Chase && mode != CamMode.Photo;
+            bool showReticle = mode != CamMode.ChaseDefault && mode != CamMode.ChaseDetails && mode != CamMode.Photo;
             _reticleCross.gameObject.SetActive(showReticle);
             _reticleV.gameObject.SetActive(showReticle);
             foreach (var c in _reticleCorners) c.gameObject.SetActive(mode == CamMode.Bottom);

@@ -57,23 +57,9 @@ namespace AeroTerra.UI
             fill.transform.SetParent(_stageRig.transform);
             fill.transform.rotation = Quaternion.Euler(10f, 150f, 0);
 
-            var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            disc.name = "Pedestal";
-            Destroy(disc.GetComponent<Collider>());
-            disc.transform.SetParent(_stageRig.transform);
-            disc.transform.localPosition = new Vector3(0, 0.5f, 0);
-            disc.transform.localScale = new Vector3(1.9f, 0.035f, 1.9f);
-            disc.GetComponent<Renderer>().sharedMaterial =
-                Procedural.DroneMeshBuilder.MakeMat(new Color(0.09f, 0.11f, 0.15f), 0.3f, 0.35f);
-
-            var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            ring.name = "PedestalRing";
-            Destroy(ring.GetComponent<Collider>());
-            ring.transform.SetParent(_stageRig.transform);
-            ring.transform.localPosition = new Vector3(0, 0.485f, 0);
-            ring.transform.localScale = new Vector3(2.15f, 0.015f, 2.15f);
-            ring.GetComponent<Renderer>().sharedMaterial =
-                Procedural.DroneMeshBuilder.MakeMat(new Color(Accent.r * 0.5f, Accent.g * 0.5f, Accent.b * 0.5f), 0.1f, 0.7f);
+            // No display pedestal — matches WorkshopUI's stage (see its SetupStage
+            // remarks): used to have a flat disc + Accent-tinted ring under the model,
+            // removed so the stage shows only the drone itself.
         }
 
         /// <summary>Re-creates the drag/scroll surface as a child of the host screen's

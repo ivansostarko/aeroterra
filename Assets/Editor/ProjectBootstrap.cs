@@ -177,9 +177,10 @@ namespace AeroTerra.EditorTools
             loiter.ModelKind = DroneModelKind.LoiteringDelta;
             loiter.Category = DroneCategory.Military;
             loiter.FlightModel = DroneFlightModel.FixedWing;
-            loiter.Description = "Long-range delta-wing loitering munition inspired by the Shahed-136 " +
-                                 "silhouette: one-piece delta, drooped nose, wingtip plates and a rear " +
-                                 "pusher prop. Built for endurance, not agility. One-way mission profile (in-game).";
+            loiter.Description = "Long-range delta-wing loitering munition modeled on the Shahed-136 " +
+                                 "silhouette: one-piece blended delta, level nose, twin canted tail fins " +
+                                 "and a low centerline pusher prop. Built for endurance, not agility. " +
+                                 "One-way mission profile (in-game).";
             loiter.EmptyMassKg = 14f; loiter.RotorCount = 1; loiter.AirframeHP = 60f;
             loiter.WingspanM = 2.5f; loiter.MaxAltitudeM = 4000f;
             loiter.MaxSpeedKmh = 185f; loiter.MaxAscentRateMs = 7f; loiter.MaxThrustN = 300f;

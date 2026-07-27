@@ -338,8 +338,9 @@ namespace AeroTerra.UI
             }
 
             const float rowH = 46f, gap = 6f; // pixels — 46 fits a two-line name+class row
-            var (viewport, content, _) = ScrollList(_root, "Thumb" + listId,
-                new Vector2(ListX0, y0), new Vector2(ListX1, y1));
+            const float scrollbarW = 0.006f; // narrow — this sidebar column is tight on width
+            var (viewport, content, scrollRect) = ScrollList(_root, "Thumb" + listId,
+                new Vector2(ListX0, y0), new Vector2(ListX1 - scrollbarW, y1));
 
             float totalH = indices.Count * rowH + Mathf.Max(0, indices.Count - 1) * gap;
             content.sizeDelta = new Vector2(0f, totalH);
@@ -354,6 +355,17 @@ namespace AeroTerra.UI
                 ? Mathf.Clamp(prevContent.anchoredPosition.y, -maxScrollY, 0f) : 0f;
             content.anchoredPosition = new Vector2(0f, restoreY);
             prevContent = content;
+
+            // A visible scroll-position indicator/handle was missing here — WorkshopUI's
+            // hangar rail (same ScrollList primitive) always adds one when there's
+            // anything to scroll; without it this list gave no visual sign it could
+            // scroll at all, which read as "scrolling doesn't work."
+            if (maxScrollY > 0f)
+            {
+                var scrollbar = VScrollbar_(_root, new Vector2(ListX1 - scrollbarW + 0.001f, y0), new Vector2(ListX1, y1));
+                scrollRect.verticalScrollbar = scrollbar;
+                scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            }
 
             for (int r = 0; r < indices.Count; r++)
             {
@@ -393,16 +405,29 @@ namespace AeroTerra.UI
             }
         }
 
+        /// <summary>Right-side drone info panel — redesigned to match WorkshopUI's SPECS
+        /// tab visual language (section headers with an underline rule, a category
+        /// glyph badge, a zebra-striped key-stats table) instead of the old flat stack
+        /// of bare labels, while staying compact enough for a picker screen (a handful
+        /// of headline stats, not the Workshop's full GENERAL/PERFORMANCE/SYSTEMS
+        /// breakdown — that level of detail belongs in the Workshop, this screen's job
+        /// is "pick one and go").</summary>
         private void BuildDetailsPanel(DroneSpecification spec, Workshop.CustomDroneData custom)
         {
             var panel = Panel_(_root, "Details", Panel, new Vector2(SideX0, StageY0), new Vector2(SideX1, StageY1 + 0.035f));
 
             string title = custom != null ? custom.CustomName : spec.DisplayName;
-            Label(panel, title.ToUpper(), 26, new Vector2(0.06f, 0.90f), new Vector2(0.94f, 0.975f),
+            Label(panel, title.ToUpper(), 24, new Vector2(0.06f, 0.930f), new Vector2(0.94f, 0.978f),
                   TextMain, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
 
+            // Category glyph badge + subtitle, same visual pairing WorkshopUI's stage
+            // overlay and hangar cards use for at-a-glance Military/Cargo/Civilian read.
+            var badge = Panel_(panel, "CategoryBadge", new Color(1, 1, 1, 0.06f),
+                               new Vector2(0.06f, 0.888f), new Vector2(0.145f, 0.922f));
+            PaintCategoryGlyph(badge, spec.Category);
             string sub = custom != null ? $"Custom build of {spec.DisplayName}" : spec.Manufacturer;
-            Label(panel, sub, 15, new Vector2(0.06f, 0.855f), new Vector2(0.94f, 0.895f), Accent);
+            Label(panel, $"{sub}  ·  {spec.CategoryLabel()}", 13, new Vector2(0.165f, 0.888f), new Vector2(0.94f, 0.922f),
+                  Accent, TMPro.TextAlignmentOptions.MidlineLeft);
 
             bool fuelPowered = spec.PowerSystem == PowerSystemType.Fuel;
             string powerText = custom != null
@@ -411,26 +436,91 @@ namespace AeroTerra.UI
             string cfg = custom != null
                 ? $"{powerText} · Payload {custom.PayloadKg:0.#} kg · custom loadout ({Procedural.DroneSkinBuilder.SkinLabel(custom.SkinId)} skin)"
                 : $"{powerText} · Payload {spec.MaxPayloadKg:0.#} kg · stock loadout";
-            Label(panel, cfg, 14, new Vector2(0.06f, 0.805f), new Vector2(0.94f, 0.845f), TextDim);
+            Label(panel, cfg, 12, new Vector2(0.06f, 0.850f), new Vector2(0.94f, 0.882f), TextDim);
 
-            Label(panel, spec.Description, 13, new Vector2(0.06f, 0.62f), new Vector2(0.94f, 0.795f), TextDim);
+            Label(panel, spec.Description, 12, new Vector2(0.06f, 0.700f), new Vector2(0.94f, 0.842f), TextDim);
 
-            float ry1 = 0.575f;
-            const float ratingRowH = 0.075f;
+            SectionHeader(panel, "RATINGS", 0.655f);
+            float ry1 = 0.615f;
+            const float ratingRowH = 0.050f;
             foreach (var (label, stars) in spec.StarRatings())
             {
-                Label(panel, label, 13, new Vector2(0.06f, ry1 - ratingRowH), new Vector2(0.42f, ry1),
+                Label(panel, label, 12, new Vector2(0.06f, ry1 - ratingRowH), new Vector2(0.42f, ry1),
                       TextDim, TMPro.TextAlignmentOptions.MidlineLeft);
-                StarRow(panel, stars, 5, new Vector2(0.46f, ry1 - ratingRowH + 0.012f), new Vector2(0.94f, ry1 - 0.012f));
+                StarRow(panel, stars, 5, new Vector2(0.46f, ry1 - ratingRowH + 0.008f), new Vector2(0.94f, ry1 - 0.008f));
                 ry1 -= ratingRowH;
             }
 
-            Button_(panel, "FLY", new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.12f), () =>
+            float statsHeaderY = ry1 - 0.045f;
+            SectionHeader(panel, "KEY STATS", statsHeaderY);
+            float statsTop = statsHeaderY - 0.045f;
+            float wh = custom != null ? custom.BatteryWh : spec.MaxBatteryWh;
+            float l = custom != null ? custom.FuelL : spec.MaxFuelL;
+            (string label, string value)[] stats =
+            {
+                ("CLASS", spec.ClassLabel()),
+                ("TOP SPEED", $"{spec.MaxSpeedKmh:0} km/h"),
+                ("SERVICE CEILING", $"{spec.MaxAltitudeM:0} m"),
+                ("ENDURANCE", fuelPowered ? $"{spec.FuelEnduranceMinutes(l):0} min" : $"{spec.EnduranceMinutes(wh):0} min"),
+                ("RANGE", fuelPowered ? $"{spec.FuelRangeKm(l):0} km" : $"{spec.RangeKm(wh):0} km"),
+                ("EMPTY MASS", $"{spec.EmptyMassKg:0.#} kg"),
+            };
+            const float statRowH = 0.024f;
+            for (int i = 0; i < stats.Length; i++)
+            {
+                float sy1 = statsTop - i * statRowH, sy0 = sy1 - statRowH;
+                if (i % 2 == 0)
+                    Panel_(panel, "StatRowBg", new Color(1, 1, 1, 0.035f), new Vector2(0.04f, sy0), new Vector2(0.96f, sy1));
+                Label(panel, stats[i].label, 11, new Vector2(0.06f, sy0), new Vector2(0.55f, sy1),
+                      TextDim, TMPro.TextAlignmentOptions.MidlineLeft);
+                Label(panel, stats[i].value, 13, new Vector2(0.45f, sy0), new Vector2(0.94f, sy1),
+                      TextMain, TMPro.TextAlignmentOptions.MidlineRight, TMPro.FontStyles.Bold);
+            }
+
+            Button_(panel, "FLY", new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.11f), () =>
             {
                 _pickedSpec = spec;
                 _pickedCustom = custom;
                 BuildConditionsScreen();
-            }, Accent, 26);
+            }, Accent, 24);
+        }
+
+        /// <summary>Accent-colored header + underline rule — same visual convention as
+        /// WorkshopUI's SectionHeader (duplicated locally; it's private to that class).</summary>
+        private static void SectionHeader(Transform panel, string text, float yTop)
+        {
+            Label(panel, text, 15, new Vector2(0.06f, yTop), new Vector2(0.94f, yTop + 0.035f),
+                  Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
+            Panel_(panel, "Underline", new Color(Accent.r, Accent.g, Accent.b, 0.25f),
+                   new Vector2(0.06f, yTop - 0.004f), new Vector2(0.94f, yTop - 0.001f));
+        }
+
+        /// <summary>Small glyph distinguishing the three Workshop drone categories at a
+        /// glance — same shapes/colors as WorkshopUI.PaintCategoryGlyph (duplicated
+        /// locally; it's private to that class). Military = a chevron, Cargo/Logistics
+        /// = a boxy crate silhouette, Civilian = a plain circle.</summary>
+        private static void PaintCategoryGlyph(Transform area, DroneCategory category)
+        {
+            switch (category)
+            {
+                case DroneCategory.Military:
+                    var chevA = Panel_(area, "ChevA", AccentWarn, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                       new Vector2(-9, 1), new Vector2(0, 9));
+                    chevA.localRotation = Quaternion.Euler(0, 0, -35f);
+                    var chevB = Panel_(area, "ChevB", AccentWarn, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                       new Vector2(0, 1), new Vector2(9, 9));
+                    chevB.localRotation = Quaternion.Euler(0, 0, 35f);
+                    break;
+                case DroneCategory.CargoLogistics:
+                    var crate = Panel_(area, "Glyph", new Color(0.15f, 0.45f, 0.75f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                       new Vector2(-9, -8), new Vector2(9, 8));
+                    Panel_(crate, "Strap", new Color(0, 0, 0, 0.35f), new Vector2(0, 0.42f), new Vector2(1, 0.58f));
+                    break;
+                default: // Civilian
+                    Panel_(area, "Glyph", Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                           new Vector2(-8, -8), new Vector2(8, 8));
+                    break;
+            }
         }
 
         // ---------- Screen 3: flying conditions ----------

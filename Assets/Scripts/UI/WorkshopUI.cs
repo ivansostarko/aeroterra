@@ -36,6 +36,8 @@ namespace AeroTerra.UI
         private DroneSpecification _compareTarget; // null = overlay still on the picker step
         private RectTransform _hangarContent;   // last hangar ScrollList content — read for its live
                                                  // scroll offset right before each rebuild replaces it
+        private DroneCategory? _hangarFilter;   // null = show every category
+        private string _pendingDeleteName;      // Saved tab: non-null while the delete-confirm modal is up
 
         // 3D stage camera orbit
         private float _camDist = 2.9f;
@@ -56,6 +58,8 @@ namespace AeroTerra.UI
             _framedIndex = -1;
             _showCompareOverlay = false;
             _compareTarget = null;
+            _hangarFilter = null;
+            _pendingDeleteName = null;
             SetupStage();
             Build();
         }
@@ -120,18 +124,10 @@ namespace AeroTerra.UI
                 fill.transform.SetParent(_stageRig.transform);
                 fill.transform.rotation = Quaternion.Euler(10f, 150f, 0);
 
-                // Display pedestal: a flat neutral-dark disc under the hovering drone.
-                // (Used to have a second, thinner "PedestalRing" cylinder tinted with the
-                // UI Accent color for a faint glow — removed, it read as an odd blue
-                // footer/halo under the model rather than a subtle stage detail.)
-                var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                disc.name = "Pedestal";
-                Destroy(disc.GetComponent<Collider>());
-                disc.transform.SetParent(_stageRig.transform);
-                disc.transform.localPosition = new Vector3(0, 0.5f, 0);
-                disc.transform.localScale = new Vector3(1.9f, 0.035f, 1.9f);
-                disc.GetComponent<Renderer>().sharedMaterial =
-                    Procedural.DroneMeshBuilder.MakeMat(new Color(0.09f, 0.11f, 0.15f), 0.3f, 0.35f);
+                // No display pedestal — used to have a flat disc (and, before that, an
+                // Accent-tinted "PedestalRing") under the hovering drone; removed
+                // entirely per user request so the stage shows only the drone itself,
+                // floating against the plain stage backdrop (_wsCam.backgroundColor).
             }
         }
 
@@ -186,6 +182,7 @@ namespace AeroTerra.UI
             BuildStageOverlays(spec);
             BuildSidePanel(spec);
             if (_showCompareOverlay) BuildCompareOverlay(spec);
+            if (_pendingDeleteName != null) BuildDeleteConfirmOverlay();
 
             RefreshLive();
         }
@@ -214,8 +211,15 @@ namespace AeroTerra.UI
             var rail = Panel_(_root, "Hangar", Bg, Vector2.zero, new Vector2(RailX1, HeaderY0));
             Label(rail, "HANGAR", 18, new Vector2(0.08f, 0.945f), new Vector2(0.92f, 0.99f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
-            Label(rail, "ALL REGISTERED AIRFRAMES — SCROLL TO BROWSE", 11,
+            Label(rail, "SCROLL TO BROWSE — FILTER BY TYPE BELOW", 11,
                   new Vector2(0.08f, 0.915f), new Vector2(0.92f, 0.945f), TextDim);
+
+            const float scrollbarW = 0.02f;
+            Dropdown_(rail, new Vector2(0.08f, 0.855f), new Vector2(0.92f, 0.892f),
+                      new Vector2(0.08f, 0.855f - HangarFilterOptions.Length * 0.032f), new Vector2(0.92f, 0.855f),
+                      HangarFilterOptions, _hangarFilter,
+                      picked => { _hangarFilter = picked; Build(); },
+                      HangarFilterLabel);
 
             // Real ScrollRect (mouse-wheel + drag) rather than a hand-rolled offset that
             // rebuilt the ENTIRE Workshop screen on every wheel tick — that teardown/
@@ -223,14 +227,19 @@ namespace AeroTerra.UI
             // input fields, etc. every tick) is what made scrolling feel broken. The
             // roster outgrew one column a while back (12 stock airframes now) so this
             // has to actually scroll, not just fit-or-clip.
-            var drones = _ctrl.BaseDrones;
+            var allDrones = _ctrl.BaseDrones;
+            var drones = new System.Collections.Generic.List<(DroneSpecification spec, int origIndex)>();
+            for (int i = 0; i < allDrones.Length; i++)
+                if (_hangarFilter == null || allDrones[i].Category == _hangarFilter.Value)
+                    drones.Add((allDrones[i], i));
+
             const float cardH = 92f, gap = 10f; // pixels
-            const float listTop = 0.895f, listBottom = 0.03f, scrollbarW = 0.02f;
+            const float listTop = 0.840f, listBottom = 0.03f;
 
             var (viewport, content, scrollRect) = ScrollList(rail, "Hangar",
                 new Vector2(0f, listBottom), new Vector2(1f - scrollbarW, listTop));
 
-            float totalH = drones.Length * cardH + Mathf.Max(0, drones.Length - 1) * gap;
+            float totalH = drones.Count * cardH + Mathf.Max(0, drones.Count - 1) * gap;
             content.sizeDelta = new Vector2(0f, totalH);
 
             // content.anchoredPosition.y is <= 0 once scrolled down (top-pivoted content
@@ -244,8 +253,20 @@ namespace AeroTerra.UI
             content.anchoredPosition = new Vector2(0f, restoreY);
             _hangarContent = content;
 
-            for (int i = 0; i < drones.Length; i++)
-                BuildHangarCard(content, drones[i], i, i * (cardH + gap), cardH);
+            if (drones.Count == 0)
+            {
+                // Positioned the same pixel-offset-from-top-edge way BuildHangarCard
+                // places cards below, not fractional anchors — content.sizeDelta is
+                // (0,0) here (an empty filtered list), which would collapse any
+                // fractionally-anchored child to nothing.
+                var msg = Panel_(content, "NoMatch", Color.clear, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                                 new Vector2(0f, -70f), new Vector2(0f, 0f));
+                Label(msg, "No airframes match this filter.", 13, Vector2.zero, Vector2.one,
+                      TextDim, TMPro.TextAlignmentOptions.Center);
+            }
+
+            for (int i = 0; i < drones.Count; i++)
+                BuildHangarCard(content, drones[i].spec, drones[i].origIndex, i * (cardH + gap), cardH);
 
             if (maxScrollY > 0f)
             {
@@ -254,6 +275,17 @@ namespace AeroTerra.UI
                 scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
             }
         }
+
+        private static readonly DroneCategory?[] HangarFilterOptions =
+            { null, DroneCategory.Military, DroneCategory.CargoLogistics, DroneCategory.Civilian };
+
+        private static string HangarFilterLabel(DroneCategory? c) => c switch
+        {
+            DroneCategory.Military => "MILITARY",
+            DroneCategory.CargoLogistics => "CARGO / LOGISTICS",
+            DroneCategory.Civilian => "CIVILIAN",
+            _ => "ALL TYPES",
+        };
 
         private void BuildHangarCard(Transform content, DroneSpecification spec, int index, float topY, float height)
         {
@@ -586,30 +618,47 @@ namespace AeroTerra.UI
         // a non-scrolling one-screen panel, freeing 0.84..1.0 for the new ONBOARD
         // CAMERAS section on top while keeping every other section's relative spacing
         // (and physical on-screen size) exactly as before.
-        /// <summary>LOADOUT tab, split into APPEARANCE / POWER &amp; PAYLOAD / SYSTEMS
-        /// sub-tabs (same _loadoutSubTab pattern as the Specs tab's GENERAL/PERFORMANCE/
-        /// SYSTEMS split) so each screen gets real breathing room instead of one long
-        /// scrolling column. Name field + SAVE stay in a persistent footer below every
-        /// sub-tab, since saving is the one action that always makes sense regardless of
-        /// which section you're looking at.</summary>
+        // Vertical tab rail (left) vs. content column (right) split for the LOADOUT
+        // tab's interior — see BuildLoadoutTab. Kept as named constants since every
+        // sub-tab builder below positions its sections within LoadoutContentX0/X1.
+        private const float LoadoutRailX0 = 0.06f, LoadoutRailX1 = 0.30f;
+        private const float LoadoutContentX0 = 0.34f, LoadoutContentX1 = 0.94f;
+
+        /// <summary>LOADOUT tab: a vertical APPEARANCE / POWER / PAYLOAD / ADDITIONAL
+        /// PAYLOAD tab rail on the left (same _loadoutSubTab selection state as before,
+        /// just laid out top-to-bottom instead of left-to-right) with each section's
+        /// content in the column to its right. Name field + SAVE stay in a persistent
+        /// footer spanning the full width below both, since saving is the one action
+        /// that always makes sense regardless of which section is open.</summary>
         private void BuildLoadoutTab(Transform panel, DroneSpecification spec)
         {
-            string[] subTabs = { "APPEARANCE", "POWER & PAYLOAD", "SYSTEMS" };
-            const float subTabY1 = 0.935f, subTabY0 = 0.893f;
-            float subTabW = (0.94f - 0.06f - (subTabs.Length - 1) * 0.01f) / subTabs.Length;
+            string[] subTabs =
+            {
+                "APPEARANCE",
+                "POWER",
+                spec.Category == DroneCategory.Military ? "AMMUNITION\nPAYLOAD" : "CARGO\nPAYLOAD",
+                "ADDITIONAL\nPAYLOAD",
+            };
+            // Fixed, compact row height — rail buttons used to stretch to fill the
+            // entire rail height, which read as oversized. Packed at the top instead,
+            // leaving the rest of the rail empty rather than inflating the buttons.
+            const float railY1 = 0.935f, railY0 = 0.150f, gap = 0.014f, rowH = 0.062f;
             for (int i = 0; i < subTabs.Length; i++)
             {
                 int idx = i;
-                float sx0 = 0.06f + i * (subTabW + 0.01f);
-                Button_(panel, subTabs[i], new Vector2(sx0, subTabY0), new Vector2(sx0 + subTabW, subTabY1),
+                float ry1 = railY1 - i * (rowH + gap), ry0 = ry1 - rowH;
+                Button_(panel, subTabs[i], new Vector2(LoadoutRailX0, ry0), new Vector2(LoadoutRailX1, ry1),
                         () => { if (_loadoutSubTab != idx) { _loadoutSubTab = idx; Build(); } },
-                        _loadoutSubTab == i ? Accent : PanelAlt, 12);
+                        _loadoutSubTab == i ? Accent : PanelAlt, 11);
             }
+            Panel_(panel, "LoadoutRailDivider", new Color(1, 1, 1, 0.08f),
+                   new Vector2(LoadoutRailX1 + 0.015f, railY0), new Vector2(LoadoutRailX1 + 0.017f, railY1));
 
             switch (_loadoutSubTab)
             {
-                case 1: BuildLoadoutPowerPayload(panel, spec); break;
-                case 2: BuildLoadoutSystems(panel, spec); break;
+                case 1: BuildLoadoutPower(panel, spec); break;
+                case 2: BuildLoadoutPayload(panel, spec); break;
+                case 3: BuildLoadoutSystems(panel, spec); break;
                 default: BuildLoadoutAppearance(panel, spec); break;
             }
 
@@ -618,60 +667,73 @@ namespace AeroTerra.UI
 
         private void BuildLoadoutAppearance(Transform panel, DroneSpecification spec)
         {
-            SectionHeader(panel, "MAIN COLOR", 0.855f);
+            const float x0 = LoadoutContentX0, x1 = LoadoutContentX1;
+
+            SectionHeader(panel, "MAIN COLOR", 0.900f, x0, x1);
             int colorIdx = System.Array.FindIndex(BodyColorPalette, p => ColorsApprox(p.color, _ctrl.CurrentBodyColor));
             (string name, Color color) currentColorEntry = colorIdx >= 0
                 ? BodyColorPalette[colorIdx] : ("FACTORY DEFAULT", _ctrl.CurrentBodyColor);
 
-            Panel_(panel, "ColorPreview", currentColorEntry.color, new Vector2(0.06f, 0.795f), new Vector2(0.145f, 0.845f));
-            Dropdown_(panel, new Vector2(0.175f, 0.795f), new Vector2(0.94f, 0.845f),
-                      new Vector2(0.175f, 0.795f - BodyColorPalette.Length * 0.032f), new Vector2(0.94f, 0.795f),
+            Panel_(panel, "ColorPreview", currentColorEntry.color, new Vector2(x0, 0.830f), new Vector2(x0 + 0.09f, 0.885f));
+            Dropdown_(panel, new Vector2(x0 + 0.12f, 0.830f), new Vector2(x1, 0.885f),
+                      new Vector2(x0 + 0.12f, 0.830f - BodyColorPalette.Length * 0.032f), new Vector2(x1, 0.830f),
                       BodyColorPalette, currentColorEntry,
                       picked => { _ctrl.SetBodyColor(picked.color); RefreshLive(); Build(); },
                       p => p.name);
-            Label(panel, "Pick a factory color, then choose a pattern to paint over it below.", 11,
-                  new Vector2(0.06f, 0.760f), new Vector2(0.94f, 0.783f), TextDim);
+            Label(panel, "Pick a factory color, then a pattern to paint over it below.", 11,
+                  new Vector2(x0, 0.795f), new Vector2(x1, 0.822f), TextDim);
 
-            SectionHeader(panel, "SKIN PATTERN", 0.700f);
-            BuildSkinCards(panel, spec, 0.560f, 0.660f);
+            SectionHeader(panel, "SKIN PATTERN", 0.750f, x0, x1);
+            BuildSkinCards(panel, spec, x0, x1, 0.715f, 0.078f);
         }
 
-        private void BuildLoadoutPowerPayload(Transform panel, DroneSpecification spec)
+        private void BuildLoadoutPower(Transform panel, DroneSpecification spec)
         {
+            const float x0 = LoadoutContentX0, x1 = LoadoutContentX1;
             bool fuelPowered = spec.PowerSystem == PowerSystemType.Fuel;
 
-            SectionHeader(panel, fuelPowered ? "FUEL TANK" : "POWER CELL", 0.855f);
+            SectionHeader(panel, fuelPowered ? "FUEL TANK" : "POWER CELL", 0.900f, x0, x1);
             if (fuelPowered)
-                BuildFuelCards(panel, spec, 0.730f, 0.800f);
+                BuildFuelCards(panel, spec, x0, x1, 0.775f, 0.845f);
             else
-                BuildBatteryCards(panel, spec, 0.730f, 0.800f);
-            _powerLine = Label(panel, "", 12, new Vector2(0.06f, 0.700f), new Vector2(0.94f, 0.722f), TextDim);
+                BuildBatteryCards(panel, spec, x0, x1, 0.775f, 0.845f);
+            _powerLine = Label(panel, "", 12, new Vector2(x0, 0.745f), new Vector2(x1, 0.767f), TextDim);
             RefreshPowerLine(spec);
+        }
 
-            SectionHeader(panel, $"PAYLOAD — {spec.PayloadTypeName.ToUpper()}", 0.630f);
-            BuildPayloadRow(panel, spec, 0.550f, 0.600f);
-            _massLine = Label(panel, "", 13, new Vector2(0.06f, 0.510f), new Vector2(0.94f, 0.535f), TextDim);
+        /// <summary>Tab label reads AMMUNITION PAYLOAD (military) or CARGO PAYLOAD
+        /// (cargo/civilian) — see BuildLoadoutTab — but the section header inside stays
+        /// on spec.PayloadTypeName, which is already the more specific per-drone name
+        /// (e.g. "Warhead mass (simulated)" or "Cargo pod").</summary>
+        private void BuildLoadoutPayload(Transform panel, DroneSpecification spec)
+        {
+            const float x0 = LoadoutContentX0, x1 = LoadoutContentX1;
 
-            // Only offered when the current airframe has a payload model to show.
-            if (_ctrl.HasPayloadVisual)
-                Toggle_(panel, "Display payload on model", new Vector2(0.06f, 0.455f), new Vector2(0.94f, 0.492f),
-                        _ctrl.ShowPayload, v => _ctrl.SetShowPayload(v), 13);
+            SectionHeader(panel, $"PAYLOAD — {spec.PayloadTypeName.ToUpper()}", 0.900f, x0, x1);
+            BuildPayloadRow(panel, spec, x0, x1, 0.775f, 0.845f);
+            _massLine = Label(panel, "", 13, new Vector2(x0, 0.745f), new Vector2(x1, 0.770f), TextDim);
+            // No separate "display payload on model" toggle — the 3D preview shows the
+            // payload automatically whenever a nonzero weight is selected above, and
+            // hides it at 0 kg (see WorkshopController.ApplyPayloadVisual).
         }
 
         private void BuildLoadoutSystems(Transform panel, DroneSpecification spec)
         {
-            SectionHeader(panel, "ONBOARD CAMERAS", 0.855f);
-            BuildCameraBadges(panel, spec, 0.755f, 0.825f);
-            Label(panel, CameraNoteText(spec), 12, new Vector2(0.06f, 0.715f), new Vector2(0.94f, 0.750f), TextDim);
+            const float x0 = LoadoutContentX0, x1 = LoadoutContentX1;
 
-            SectionHeader(panel, "ADDITIONAL LOADOUT", 0.655f);
-            Toggle_(panel, "Smoke screen", new Vector2(0.06f, 0.580f), new Vector2(0.52f, 0.625f),
+            SectionHeader(panel, "ONBOARD CAMERAS", 0.900f, x0, x1);
+            BuildCameraBadges(panel, spec, x0, x1, 0.800f, 0.870f);
+            Label(panel, CameraNoteText(spec), 12, new Vector2(x0, 0.760f), new Vector2(x1, 0.795f), TextDim);
+
+            SectionHeader(panel, "ADDITIONAL LOADOUT", 0.700f, x0, x1);
+            Toggle_(panel, "Smoke screen", new Vector2(x0, 0.625f), new Vector2(x0 + 0.30f, 0.670f),
                     _ctrl.Working.SmokeScreenEquipped, v => { _ctrl.SetSmokeScreen(v); RefreshLive(); }, 13);
-            Label(panel, $"+{LoadoutExtras.SmokeScreenKg:0.##} kg", 12, new Vector2(0.54f, 0.580f), new Vector2(0.78f, 0.625f), TextDim);
+            Label(panel, $"+{LoadoutExtras.SmokeScreenKg:0.##} kg", 12,
+                  new Vector2(x0 + 0.32f, 0.625f), new Vector2(x1, 0.670f), TextDim);
 
-            Label(panel, "COMMS", 12, new Vector2(0.06f, 0.500f), new Vector2(0.40f, 0.535f),
+            Label(panel, "COMMS", 12, new Vector2(x0, 0.545f), new Vector2(x0 + 0.30f, 0.580f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
-            BuildCommsCards(panel, 0.400f, 0.490f);
+            BuildCommsCards(panel, x0, x1, 0.445f, 0.535f);
         }
 
         private void BuildLoadoutFooter(Transform panel)
@@ -703,7 +765,7 @@ namespace AeroTerra.UI
         /// editable, same spirit as the payload-kind badge). Equipped cameras highlight
         /// in Accent and show that camera's icon; unfitted ones stay dim with no icon,
         /// same visual language as BuildCommsCards.</summary>
-        private void BuildCameraBadges(Transform panel, DroneSpecification spec, float y0, float y1)
+        private void BuildCameraBadges(Transform panel, DroneSpecification spec, float x0Row, float x1Row, float y0, float y1)
         {
             var defs = new (string name, bool has, string icon)[]
             {
@@ -712,11 +774,11 @@ namespace AeroTerra.UI
                 ("BOTTOM SURVEILLANCE", spec.HasBackCamera, "back_camera_icon"),
             };
             const float gap = 0.012f;
-            float cellW = (0.94f - 0.06f - (defs.Length - 1) * gap) / defs.Length;
+            float cellW = (x1Row - x0Row - (defs.Length - 1) * gap) / defs.Length;
             for (int i = 0; i < defs.Length; i++)
             {
                 var (name, has, iconFile) = defs[i];
-                float x0 = 0.06f + i * (cellW + gap), x1 = x0 + cellW;
+                float x0 = x0Row + i * (cellW + gap), x1 = x0 + cellW;
                 var card = Panel_(panel, "Cam_" + name, has ? PanelAlt : Panel, new Vector2(x0, y0), new Vector2(x1, y1));
                 Panel_(card, "Stripe", has ? Accent : new Color(1, 1, 1, 0.08f), Vector2.zero, new Vector2(1f, 0.08f));
 
@@ -816,7 +878,7 @@ namespace AeroTerra.UI
             }
         }
 
-        private void BuildBatteryCards(Transform panel, DroneSpecification spec, float y0, float y1)
+        private void BuildBatteryCards(Transform panel, DroneSpecification spec, float x0Row, float x1Row, float y0, float y1)
         {
             var variants = spec.GetBatteryVariants();
             float wh = _ctrl.Working.BatteryWh;
@@ -825,11 +887,11 @@ namespace AeroTerra.UI
                 if (Mathf.Approximately(variants[i].CapacityWh, wh)) selected = i;
 
             const float gap = 0.012f;
-            float cellW = (0.94f - 0.06f - (variants.Length - 1) * gap) / variants.Length;
+            float cellW = (x1Row - x0Row - (variants.Length - 1) * gap) / variants.Length;
             for (int i = 0; i < variants.Length; i++)
             {
                 var v = variants[i];
-                float x0 = 0.06f + i * (cellW + gap), x1 = x0 + cellW;
+                float x0 = x0Row + i * (cellW + gap), x1 = x0 + cellW;
                 string hover = $"{v.Name}\n{v.CapacityWh:0} Wh · {v.MassKg:0.##} kg\n" +
                                $"{spec.EnduranceMinutes(v.CapacityWh):0} min flight";
                 BuildPowerCard(panel, x0, x1, y0, y1, i == selected, v.Name, $"{v.CapacityWh:0} Wh", hover,
@@ -837,7 +899,7 @@ namespace AeroTerra.UI
             }
         }
 
-        private void BuildFuelCards(Transform panel, DroneSpecification spec, float y0, float y1)
+        private void BuildFuelCards(Transform panel, DroneSpecification spec, float x0Row, float x1Row, float y0, float y1)
         {
             var variants = spec.GetFuelVariants();
             float l = _ctrl.Working.FuelL;
@@ -846,11 +908,11 @@ namespace AeroTerra.UI
                 if (Mathf.Approximately(variants[i].CapacityL, l)) selected = i;
 
             const float gap = 0.012f;
-            float cellW = (0.94f - 0.06f - (variants.Length - 1) * gap) / variants.Length;
+            float cellW = (x1Row - x0Row - (variants.Length - 1) * gap) / variants.Length;
             for (int i = 0; i < variants.Length; i++)
             {
                 var v = variants[i];
-                float x0 = 0.06f + i * (cellW + gap), x1 = x0 + cellW;
+                float x0 = x0Row + i * (cellW + gap), x1 = x0 + cellW;
                 string hover = $"{v.Name}\n{v.CapacityL:0.#} L · {v.MassKg:0.##} kg\n" +
                                $"{spec.FuelEnduranceMinutes(v.CapacityL):0} min flight";
                 BuildPowerCard(panel, x0, x1, y0, y1, i == selected, v.Name, $"{v.CapacityL:0.#} L", hover,
@@ -891,15 +953,16 @@ namespace AeroTerra.UI
             AddTrigger(trigger, EventTriggerType.PointerExit, _ => RefreshLive());
         }
 
-        private void BuildPayloadRow(Transform panel, DroneSpecification spec, float y0, float y1)
+        private void BuildPayloadRow(Transform panel, DroneSpecification spec, float x0, float x1, float y0, float y1)
         {
             // Static badge for the assigned PayloadKind (not player-selectable — each
             // military drone is built around one munition type) beside the weight picker.
-            var badge = Panel_(panel, "PayloadBadge", PanelAlt, new Vector2(0.06f, y0), new Vector2(0.20f, y1));
+            float badgeW = Mathf.Min(0.14f, (x1 - x0) * 0.22f);
+            var badge = Panel_(panel, "PayloadBadge", PanelAlt, new Vector2(x0, y0), new Vector2(x0 + badgeW, y1));
             PaintPayloadGlyph(badge, spec.PayloadKind);
 
             OptionRow(panel, spec.PayloadOptionsKg, _ctrl.Working.PayloadKg,
-                new Vector2(0.22f, y0), new Vector2(0.94f, y1),
+                new Vector2(x0 + badgeW + 0.02f, y0), new Vector2(x1, y1),
                 kg => { _ctrl.SetPayload(kg); RefreshLive(); }, kg => $"{kg:0.#} kg");
         }
 
@@ -960,29 +1023,41 @@ namespace AeroTerra.UI
             }
         }
 
-        private void BuildSkinCards(Transform panel, DroneSpecification spec, float y0, float y1)
+        /// <summary>Skin picker, laid out as a 2-column list (rows top-to-bottom, left
+        /// column then right) rather than one wide row of tiles — the vertical-tab
+        /// LOADOUT layout's content column is narrow, and this roster has grown past
+        /// what a single row of square tiles could show legibly. Each row is a small
+        /// swatch (the actual procedural texture, not a placeholder) plus the pattern
+        /// name, matching the list-row look BuildComparePickerRow/BuildHangarCard
+        /// already use elsewhere in this file.</summary>
+        private void BuildSkinCards(Transform panel, DroneSpecification spec, float x0, float x1, float yTop, float rowH)
         {
             var ids = Procedural.DroneSkinBuilder.SkinIds;
-            const float gap = 0.010f;
-            float cellW = (0.94f - 0.06f - (ids.Length - 1) * gap) / ids.Length;
+            const int cols = 2;
+            const float colGap = 0.02f, rowGap = 0.010f;
+            float colW = (x1 - x0 - (cols - 1) * colGap) / cols;
+
             for (int i = 0; i < ids.Length; i++)
             {
+                int col = i % cols, row = i / cols;
                 string id = ids[i];
                 bool selected = _ctrl.Working.SkinId == id;
-                float x0 = 0.06f + i * (cellW + gap), x1 = x0 + cellW;
-                var card = Panel_(panel, "Skin_" + id, selected ? PanelAlt : Panel, new Vector2(x0, y0), new Vector2(x1, y1));
-                Panel_(card, "Stripe", selected ? Accent : new Color(1, 1, 1, 0.08f), Vector2.zero, new Vector2(1f, 0.06f));
+                float cx0 = x0 + col * (colW + colGap), cx1 = cx0 + colW;
+                float cy1 = yTop - row * (rowH + rowGap), cy0 = cy1 - rowH;
+
+                var card = Panel_(panel, "Skin_" + id, selected ? PanelAlt : Panel, new Vector2(cx0, cy0), new Vector2(cx1, cy1));
+                Panel_(card, "Stripe", selected ? Accent : new Color(1, 1, 1, 0.08f), Vector2.zero, new Vector2(0.05f, 1f));
 
                 var swatchGo = new GameObject("Swatch", typeof(RawImage));
                 swatchGo.transform.SetParent(card, false);
                 var tex = Procedural.DroneSkinBuilder.GetTexture(id, _ctrl.CurrentBodyColor, spec.DefaultAccentColor);
                 swatchGo.GetComponent<RawImage>().texture = tex;
                 var swatchRt = swatchGo.GetComponent<RectTransform>();
-                swatchRt.anchorMin = new Vector2(0.14f, 0.32f); swatchRt.anchorMax = new Vector2(0.86f, 0.9f);
+                swatchRt.anchorMin = new Vector2(0.10f, 0.14f); swatchRt.anchorMax = new Vector2(0.34f, 0.86f);
                 swatchRt.offsetMin = Vector2.zero; swatchRt.offsetMax = Vector2.zero;
 
-                Label(card, Procedural.DroneSkinBuilder.SkinLabel(id), 10, new Vector2(0.04f, 0.10f), new Vector2(0.96f, 0.30f),
-                      selected ? TextMain : TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+                Label(card, Procedural.DroneSkinBuilder.SkinLabel(id), 10, new Vector2(0.40f, 0f), new Vector2(0.97f, 1f),
+                      selected ? TextMain : TextDim, TMPro.TextAlignmentOptions.MidlineLeft, TMPro.FontStyles.Bold);
 
                 var btn = card.gameObject.AddComponent<Button>();
                 btn.targetGraphic = card.GetComponent<Image>();
@@ -997,16 +1072,16 @@ namespace AeroTerra.UI
         private static readonly Drone.CommsType[] CommsOptions =
             { Drone.CommsType.Radio, Drone.CommsType.FiveG, Drone.CommsType.AnalogWire };
 
-        private void BuildCommsCards(Transform panel, float y0, float y1)
+        private void BuildCommsCards(Transform panel, float x0Row, float x1Row, float y0, float y1)
         {
             var options = CommsOptions;
             const float gap = 0.012f;
-            float cellW = (0.94f - 0.06f - (options.Length - 1) * gap) / options.Length;
+            float cellW = (x1Row - x0Row - (options.Length - 1) * gap) / options.Length;
             for (int i = 0; i < options.Length; i++)
             {
                 var type = options[i];
                 bool selected = _ctrl.Working.Comms == type;
-                float x0 = 0.06f + i * (cellW + gap), x1 = x0 + cellW;
+                float x0 = x0Row + i * (cellW + gap), x1 = x0 + cellW;
                 var card = Panel_(panel, "Comms_" + type, selected ? PanelAlt : Panel, new Vector2(x0, y0), new Vector2(x1, y1));
                 Panel_(card, "Stripe", selected ? Accent : new Color(1, 1, 1, 0.08f), Vector2.zero, new Vector2(1f, 0.08f));
 
@@ -1067,21 +1142,104 @@ namespace AeroTerra.UI
                 var data = d;
                 Button_(row, "LOAD", new Vector2(0.62f, 0.18f), new Vector2(0.80f, 0.82f),
                         () => { _ctrl.LoadConfig(data); _tab = 1; Build(); }, PanelAlt, 13);
-                Button_(row, "✕", new Vector2(0.83f, 0.18f), new Vector2(0.96f, 0.82f),
-                        () => { _ctrl.DeleteConfig(data.CustomName); Build(); }, AccentWarn, 14);
+                BuildDeleteIconButton(row, new Vector2(0.83f, 0.18f), new Vector2(0.96f, 0.82f),
+                        () => { _pendingDeleteName = data.CustomName; Build(); });
 
                 y1 = y0 - gap;
             }
         }
 
+        private static Texture2D _deleteIconCache;
+        private static bool _deleteIconChecked;
+
+        /// <summary>Loads Assets/Resources/Images/ui/Menu/delete-icon.png once and caches
+        /// it; returns null (silently) if the icon hasn't been imported yet, same
+        /// fallback spirit as UIBuilder.BackButton_.</summary>
+        private static Texture2D LoadDeleteIcon()
+        {
+            if (!_deleteIconChecked)
+            {
+                _deleteIconChecked = true;
+                _deleteIconCache = Resources.Load<Texture2D>("Images/ui/Menu/delete-icon");
+            }
+            return _deleteIconCache;
+        }
+
+        /// <summary>Icon-only delete button for a Saved-tab row — falls back to the old
+        /// plain "✕" text button if delete-icon.png hasn't been imported yet, same
+        /// fallback contract as UIBuilder.BackButton_. Doesn't delete on click; it just
+        /// opens the confirmation modal (see BuildDeleteConfirmOverlay) — the caller's
+        /// onClick is what stages _pendingDeleteName.</summary>
+        private void BuildDeleteIconButton(Transform parent, Vector2 anchorMin, Vector2 anchorMax, System.Action onClick)
+        {
+            var icon = LoadDeleteIcon();
+            if (icon == null) { Button_(parent, "✕", anchorMin, anchorMax, onClick, AccentWarn, 14); return; }
+
+            var rt = Panel_(parent, "DeleteBtn", AccentWarn, anchorMin, anchorMax, new Vector2(4, 4), new Vector2(-4, -4));
+            var iconGo = new GameObject("Icon", typeof(RawImage));
+            iconGo.transform.SetParent(rt, false);
+            var iconRt = (RectTransform)iconGo.transform;
+            iconRt.anchorMin = new Vector2(0.24f, 0.22f); iconRt.anchorMax = new Vector2(0.76f, 0.78f);
+            iconRt.offsetMin = Vector2.zero; iconRt.offsetMax = Vector2.zero;
+            iconGo.GetComponent<RawImage>().texture = icon;
+
+            var btn = rt.gameObject.AddComponent<Button>();
+            btn.targetGraphic = rt.GetComponent<Image>();
+            var colors = btn.colors;
+            colors.highlightedColor = new Color(1.15f, 1.15f, 1.15f, 1f);
+            colors.pressedColor = new Color(0.7f, 0.15f, 0.05f, 1f);
+            btn.colors = colors;
+            btn.onClick.AddListener(() => { Core.AudioManager.Instance?.PlayButtonClick(); onClick?.Invoke(); });
+            var trigger = rt.gameObject.AddComponent<EventTrigger>();
+            AddTrigger(trigger, EventTriggerType.PointerEnter, _ => Core.AudioManager.Instance?.PlayButtonHover());
+        }
+
+        /// <summary>Confirmation modal for the Saved tab's delete action — set
+        /// _pendingDeleteName then Build() to show it, null it out (Cancel/Delete) then
+        /// Build() to dismiss. Same full-screen-scrim-plus-centered-box shape as
+        /// BuildCompareOverlay.</summary>
+        private void BuildDeleteConfirmOverlay()
+        {
+            var overlay = Panel_(_root, "DeleteConfirm", new Color(0, 0, 0, 0.75f), Vector2.zero, Vector2.one);
+            var box = Panel_(overlay, "Box", Panel, new Vector2(0.32f, 0.36f), new Vector2(0.68f, 0.64f));
+
+            var icon = LoadDeleteIcon();
+            if (icon != null)
+            {
+                var iconGo = new GameObject("Icon", typeof(RawImage));
+                iconGo.transform.SetParent(box, false);
+                var iconRt = (RectTransform)iconGo.transform;
+                iconRt.anchorMin = new Vector2(0.42f, 0.66f); iconRt.anchorMax = new Vector2(0.58f, 0.90f);
+                iconRt.offsetMin = Vector2.zero; iconRt.offsetMax = Vector2.zero;
+                iconGo.GetComponent<RawImage>().texture = icon;
+            }
+
+            Label(box, $"DELETE “{_pendingDeleteName}”?", 18, new Vector2(0.05f, 0.42f), new Vector2(0.95f, 0.60f),
+                  TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            Label(box, "This saved build will be permanently removed. This can't be undone.", 12,
+                  new Vector2(0.08f, 0.28f), new Vector2(0.92f, 0.40f), TextDim, TMPro.TextAlignmentOptions.Center);
+
+            Button_(box, "CANCEL", new Vector2(0.08f, 0.08f), new Vector2(0.46f, 0.24f),
+                    () => { _pendingDeleteName = null; Build(); }, PanelAlt, 14);
+            Button_(box, "DELETE", new Vector2(0.54f, 0.08f), new Vector2(0.92f, 0.24f), () =>
+            {
+                _ctrl.DeleteConfig(_pendingDeleteName);
+                _pendingDeleteName = null;
+                Build();
+            }, AccentWarn, 14);
+        }
+
         // ---------------------------------------------------------------- helpers
 
-        private static void SectionHeader(Transform panel, string text, float yTop)
+        private static void SectionHeader(Transform panel, string text, float yTop) =>
+            SectionHeader(panel, text, yTop, 0.06f, 0.94f);
+
+        private static void SectionHeader(Transform panel, string text, float yTop, float x0, float x1)
         {
-            Label(panel, text, 16, new Vector2(0.06f, yTop), new Vector2(0.94f, yTop + 0.04f),
+            Label(panel, text, 16, new Vector2(x0, yTop), new Vector2(x1, yTop + 0.04f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
             Panel_(panel, "Underline", new Color(Accent.r, Accent.g, Accent.b, 0.25f),
-                   new Vector2(0.06f, yTop - 0.004f), new Vector2(0.94f, yTop - 0.001f));
+                   new Vector2(x0, yTop - 0.004f), new Vector2(x1, yTop - 0.001f));
         }
 
         /// <summary>Refresh everything that depends on the selected power cell/payload/

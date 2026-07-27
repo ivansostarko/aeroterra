@@ -35,6 +35,7 @@ namespace AeroTerra.Core
         private AudioSource _warningSfxSource;
         private AudioClip _lowPowerClip;
         private bool _warningSfxLoaded;
+        private AudioSource _pauseMusicSource;
 
         private void Awake()
         {
@@ -65,6 +66,7 @@ namespace AeroTerra.Core
             MusicVolume01 = Mathf.Clamp01(linear01);
             if (_musicSource != null) _musicSource.volume = MusicVolume01;
             if (_weatherMusicSource != null) _weatherMusicSource.volume = MusicVolume01;
+            if (_pauseMusicSource != null) _pauseMusicSource.volume = MusicVolume01;
         }
 
         public void ApplySfxVolume(float linear01) => SfxVolume01 = Mathf.Clamp01(linear01);
@@ -95,6 +97,41 @@ namespace AeroTerra.Core
         public void StopCreditsMusic() => StopBackgroundTrack();
 
         public void StopWorkshopMusic() => StopBackgroundTrack();
+
+        /// <summary>
+        /// Pause-menu background track (FlightSceneController.TogglePause) — a dedicated
+        /// AudioSource, NOT the shared _musicSource every PlayXMusic call above uses,
+        /// for two reasons: (1) it needs AudioSource.ignoreListenerPause = true so it's
+        /// actually audible while AudioListener.pause = true mutes everything else the
+        /// instant the game pauses (same opt-out the UI click/hover sfx source uses), and
+        /// (2) using the shared source would stomp whatever Free Flight background track
+        /// was already playing, losing it on resume. File: Assets/Resources/Audio/
+        /// background/pause_game_menu_background.mp3.
+        /// </summary>
+        public void PlayPauseMenuMusic()
+        {
+            if (_pauseMusicSource == null)
+            {
+                _pauseMusicSource = gameObject.AddComponent<AudioSource>();
+                _pauseMusicSource.loop = true;
+                _pauseMusicSource.playOnAwake = false;
+                _pauseMusicSource.spatialBlend = 0f;
+                _pauseMusicSource.ignoreListenerPause = true;
+            }
+            _pauseMusicSource.volume = MusicVolume01;
+            if (_pauseMusicSource.clip == null)
+            {
+                var clip = Resources.Load<AudioClip>("Audio/background/pause_game_menu_background");
+                if (clip == null) return;
+                _pauseMusicSource.clip = clip;
+            }
+            _pauseMusicSource.Play();
+        }
+
+        public void StopPauseMenuMusic()
+        {
+            if (_pauseMusicSource != null) _pauseMusicSource.Stop();
+        }
 
         private void PlayBackgroundTrack(string resourcePath)
         {

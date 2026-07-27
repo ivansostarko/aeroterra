@@ -8,17 +8,20 @@ namespace AeroTerra.UI
 {
     /// <summary>Flight camera view, cycled with InputManager.CameraAction (key C).
     /// Photo is NOT part of that cycle — it's a separate detached mode toggled with
-    /// InputManager.PhotoModeAction (key O), see DroneCameraRig.TogglePhotoMode.</summary>
-    public enum CamMode { Chase, Front, Bottom, Thermal, Photo }
+    /// InputManager.PhotoModeAction (key F8), see DroneCameraRig.TogglePhotoMode.</summary>
+    public enum CamMode { ChaseDefault, ChaseDetails, Front, Bottom, Thermal, Photo }
 
     /// <summary>
-    /// Drives the single flight Camera through four attached view modes: smooth
-    /// 3rd-person chase (default), nose-mounted front view, belly-mounted surveillance/
-    /// bombing view, and a stylized thermal look layered on the front view via a URP
-    /// color grading Volume — plus a fifth, detached Photo mode: a free-fly camera with
-    /// mouse-look, WASD/QE movement, and live FOV/exposure controls (see
-    /// UpdatePhotoMode), for composing shots away from the drone's own flight path.
-    /// Notifies FlightHUD on every mode change so its overlay matches.
+    /// Drives the single flight Camera through five attached view modes: smooth
+    /// 3rd-person ChaseDefault (default), a much closer ChaseDetails follow cam framed
+    /// tight enough to show off the airframe while still keeping the whole model in
+    /// frame regardless of its size (see ConfigureForTarget's FOV/bounding-radius math),
+    /// nose-mounted front view, belly-mounted surveillance/bombing view, and a stylized
+    /// thermal look layered on the front view via a URP color grading Volume — plus a
+    /// sixth, detached Photo mode: a free-fly camera with mouse-look, WASD/QE movement,
+    /// and live FOV/exposure controls (see UpdatePhotoMode), for composing shots away
+    /// from the drone's own flight path. Notifies FlightHUD on every mode change so its
+    /// overlay matches.
     /// </summary>
     public class DroneCameraRig : MonoBehaviour
     {
@@ -29,7 +32,7 @@ namespace AeroTerra.UI
 
         public Transform Target;
 
-        public CamMode Mode { get; private set; } = CamMode.Chase;
+        public CamMode Mode { get; private set; } = CamMode.ChaseDefault;
 
         private Volume _thermalVolume;
         private ColorAdjustments _thermalColor;
@@ -50,6 +53,14 @@ namespace AeroTerra.UI
         private float _bankFollow;              // 0 = horizon stays level, 1 = full roll with target
         private float _lookAhead;               // seconds of velocity lead in the aim point
         private float _noseOffset = 0.4f, _bellyOffset = 0.3f, _aimHeight = 1f;
+        private Vector3 _targetSize = Vector3.one; // cached model bounds, reused by ChaseDetails' framing math
+
+        // ChaseDetails — a much tighter follow cam than ChaseDefault. Distance is derived
+        // (not a fixed constant) from the model's own bounding radius and the camera's
+        // vertical FOV, so it's always the closest distance that still keeps the WHOLE
+        // airframe in frame, whatever its actual size — see ConfigureForTarget.
+        private float _chaseDetailsDist = 2f, _chaseDetailsHeight = 0.5f;
+        private const float ChaseDetailsMargin = 1.2f; // headroom beyond the exact FOV-fit distance
 
         private float _shakeMagnitude, _shakeDuration, _shakeTimer;
 
@@ -144,15 +155,16 @@ namespace AeroTerra.UI
             if (!im.CameraAction.WasPressedThisFrame()) return;
 
             // Skip modes the airframe has no camera for — a drone with only a front
-            // camera never lands on Bottom, one with front+back cycles both. Chase
-            // is the external spectator view, not a physical camera, so it's always
-            // reachable regardless of loadout (worst case the loop lands back on it).
-            // Bounded to the first 4 CamMode values only — Photo is never reached via
-            // this cycle, only via TogglePhotoMode.
+            // camera never lands on Bottom, one with front+back cycles both. The two
+            // Chase modes are external spectator views, not physical cameras, so they're
+            // always reachable regardless of loadout (worst case the loop lands back on
+            // one of them). Bounded to the first 5 CamMode values (ChaseDefault,
+            // ChaseDetails, Front, Bottom, Thermal) — Photo is never reached via this
+            // cycle, only via TogglePhotoMode.
             CamMode next = Mode;
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 5; i++)
             {
-                next = (CamMode)(((int)next + 1) % 4);
+                next = (CamMode)(((int)next + 1) % 5);
                 if (IsAvailable(next)) break;
             }
             Mode = next;
@@ -161,7 +173,7 @@ namespace AeroTerra.UI
             FlightHUD.Instance?.SetCameraMode(Mode);
         }
 
-        /// <summary>Enters/exits the detached free-fly Photo mode (key O), remembering
+        /// <summary>Enters/exits the detached free-fly Photo mode (key F8), remembering
         /// whichever attached mode was active so exiting restores it exactly rather than
         /// always dropping back to Chase.</summary>
         private void TogglePhotoMode()
@@ -221,7 +233,7 @@ namespace AeroTerra.UI
                 CamMode.Front => spec.HasFrontCamera,
                 CamMode.Thermal => spec.HasThermalCamera,
                 CamMode.Bottom => spec.HasBackCamera,
-                _ => true, // Chase
+                _ => true, // ChaseDefault / ChaseDetails
             };
         }
 
@@ -244,6 +256,7 @@ namespace AeroTerra.UI
                 foreach (var r in rends) b.Encapsulate(r.bounds);
                 size = b.size;
             }
+            _targetSize = size;
             float span = Mathf.Max(size.x, size.z);
 
             // Pulled in closer than the old 4.5 / 1.6 / 0.32 figures — those left even
@@ -253,6 +266,17 @@ namespace AeroTerra.UI
             _noseOffset = size.z * 0.55f + 0.25f;
             _bellyOffset = size.y * 0.55f + 0.2f;
             _aimHeight = Mathf.Clamp(size.y, 0.4f, 3f);
+
+            // ChaseDetails: the closest distance that still fits the WHOLE bounding
+            // sphere inside the camera's vertical FOV (the narrower of the two axes on
+            // a typical widescreen aspect, so it's the safe one to solve for), plus a
+            // flat margin so the drone doesn't touch the frame edges. Scales correctly
+            // from a 0.26 m racing quad up to a 12 m UCAV — same math regardless of
+            // airframe size, unlike a fixed distance constant.
+            float modelRadius = size.magnitude * 0.5f;
+            float halfFovRad = _baseFov * 0.5f * Mathf.Deg2Rad;
+            _chaseDetailsDist = Mathf.Max(0.5f, modelRadius / Mathf.Sin(halfFovRad) * ChaseDetailsMargin);
+            _chaseDetailsHeight = _chaseDetailsDist * 0.22f;
 
             var spec = _flight != null ? _flight.Spec : null;
             switch (spec != null ? spec.Class : AeroTerra.Drone.DroneClass.CargoDelivery)
@@ -309,7 +333,26 @@ namespace AeroTerra.UI
                         Quaternion.LookRotation(-Target.up, Target.forward));
                     break;
 
-                default: // Chase
+                case CamMode.ChaseDetails:
+                    // Same chase-cam shape as ChaseDefault below, just much closer
+                    // (see ConfigureForTarget) and with faster response — a tight
+                    // detail shot needs to keep up with turns more precisely or the
+                    // airframe clips out of frame.
+                    Vector3 flatFwdD = Vector3.ProjectOnPlane(Target.forward, Vector3.up).normalized;
+                    if (flatFwdD.sqrMagnitude < 0.01f) flatFwdD = Vector3.forward;
+                    Vector3 desiredD = Target.position
+                        + Quaternion.LookRotation(flatFwdD) * new Vector3(0, _chaseDetailsHeight, -_chaseDetailsDist);
+                    transform.position = Vector3.Lerp(transform.position, desiredD, Time.deltaTime * _posLerp * 1.6f);
+
+                    Vector3 aimD = Target.position + Vector3.up * (_targetSize.y * 0.35f);
+                    Vector3 upD = _bankFollow > 0f
+                        ? Vector3.Slerp(Vector3.up, Target.up, _bankFollow) : Vector3.up;
+                    transform.rotation = Quaternion.Slerp(transform.rotation,
+                        Quaternion.LookRotation(aimD - transform.position, upD),
+                        Time.deltaTime * _rotLerp * 1.6f);
+                    break;
+
+                default: // ChaseDefault
                     Vector3 flatFwd = Vector3.ProjectOnPlane(Target.forward, Vector3.up).normalized;
                     if (flatFwd.sqrMagnitude < 0.01f) flatFwd = Vector3.forward;
                     Vector3 desired = Target.position

@@ -15,7 +15,11 @@ namespace AeroTerra.Procedural
     /// </summary>
     public static class DroneSkinBuilder
     {
-        public static readonly string[] SkinIds = { "stock", "camo", "stripes", "splitfade", "digital" };
+        public static readonly string[] SkinIds =
+        {
+            "stock", "camo", "stripes", "splitfade", "digital",
+            "checker", "chevron", "speckle", "gradient", "carbon",
+        };
 
         public static string SkinLabel(string id) => id switch
         {
@@ -23,6 +27,11 @@ namespace AeroTerra.Procedural
             "stripes" => "RACING STRIPES",
             "splitfade" => "SPLIT-FADE",
             "digital" => "DIGITAL",
+            "checker" => "CHECKERBOARD",
+            "chevron" => "CHEVRON",
+            "speckle" => "SPECKLE",
+            "gradient" => "GRADIENT FADE",
+            "carbon" => "CARBON WEAVE",
             _ => "STOCK",
         };
 
@@ -47,6 +56,11 @@ namespace AeroTerra.Procedural
                 case "stripes": PaintStripes(pixels, size, body, accent); break;
                 case "splitfade": PaintSplitFade(pixels, size, body, accent); break;
                 case "digital": PaintDigital(pixels, size, body, accent); break;
+                case "checker": PaintChecker(pixels, size, body, accent); break;
+                case "chevron": PaintChevron(pixels, size, body, accent); break;
+                case "speckle": PaintSpeckle(pixels, size, body, accent); break;
+                case "gradient": PaintGradient(pixels, size, body, accent); break;
+                case "carbon": PaintCarbon(pixels, size, body, accent); break;
                 default: PaintStock(pixels, size, body); break;
             }
 
@@ -140,6 +154,104 @@ namespace AeroTerra.Procedural
                 {
                     int cx = x / cell;
                     px[y * size + x] = cellColors[cy * cols + cx];
+                }
+            }
+        }
+
+        /// <summary>Flat checkerboard of body/accent squares.</summary>
+        private static void PaintChecker(Color[] px, int size, Color body, Color accent)
+        {
+            const int cell = 16;
+            for (int y = 0; y < size; y++)
+            {
+                int cy = y / cell;
+                for (int x = 0; x < size; x++)
+                {
+                    int cx = x / cell;
+                    px[y * size + x] = (cx + cy) % 2 == 0 ? body : accent;
+                }
+            }
+        }
+
+        /// <summary>Accent chevron/V bands over the body color — diagonal stripes that
+        /// mirror at the horizontal midline, same "distance from center" trick a real
+        /// V-stripe racing livery uses.</summary>
+        private static void PaintChevron(Color[] px, int size, Color body, Color accent)
+        {
+            const float period = 0.20f, width = 0.09f;
+            for (int y = 0; y < size; y++)
+            {
+                float v = y / (float)size;
+                for (int x = 0; x < size; x++)
+                {
+                    float u = x / (float)size;
+                    float distFromCenter = Mathf.Abs(u - 0.5f);
+                    float t = Mathf.Repeat(v + distFromCenter, period);
+                    px[y * size + x] = t < width ? accent : body;
+                }
+            }
+        }
+
+        /// <summary>Fine speckled noise — small accent/dark dots scattered over the body
+        /// color, deterministic per color pair. A finer-grained, sparser cousin of
+        /// PaintCamo's big soft blotches.</summary>
+        private static void PaintSpeckle(Color[] px, int size, Color body, Color accent)
+        {
+            for (int i = 0; i < px.Length; i++) px[i] = body;
+            var rnd = new System.Random(body.GetHashCode() ^ (accent.GetHashCode() * 7));
+            Color dark = Color.Lerp(body, Color.black, 0.4f);
+
+            int count = size * size / 30;
+            for (int s = 0; s < count; s++)
+            {
+                int cx = rnd.Next(size), cy = rnd.Next(size);
+                int r = rnd.Next(1, 3);
+                Color c = rnd.Next(2) == 0 ? accent : dark;
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    int y = cy + dy;
+                    if (y < 0 || y >= size) continue;
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        int x = cx + dx;
+                        if (x < 0 || x >= size) continue;
+                        if (dx * dx + dy * dy <= r * r) px[y * size + x] = c;
+                    }
+                }
+            }
+        }
+
+        /// <summary>Smooth vertical blend from body (top) to accent (bottom) — unlike
+        /// PaintSplitFade's hard diagonal seam, this fades across the whole texture.</summary>
+        private static void PaintGradient(Color[] px, int size, Color body, Color accent)
+        {
+            for (int y = 0; y < size; y++)
+            {
+                float t = y / (float)(size - 1);
+                Color c = Color.Lerp(body, accent, t);
+                for (int x = 0; x < size; x++) px[y * size + x] = c;
+            }
+        }
+
+        /// <summary>Dark carbon-fiber-style weave: a crosshatched diagonal grid darker
+        /// than the body color, with thin accent-tinted highlight lines along the seams.</summary>
+        private static void PaintCarbon(Color[] px, int size, Color body, Color accent)
+        {
+            Color dark = Color.Lerp(body, Color.black, 0.55f);
+            Color lightWeave = Color.Lerp(dark, body, 0.5f);
+            Color seamHighlight = Color.Lerp(body, accent, 0.35f);
+            const int weave = 6;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    bool seam = (x + y) % weave == 0 || Mathf.Abs(x - y) % weave == 0;
+                    if (seam) { px[y * size + x] = seamHighlight; continue; }
+
+                    int a = ((x + y) / weave) % 2;
+                    int b = ((x - y + size) / weave) % 2;
+                    px[y * size + x] = a == b ? dark : lightWeave;
                 }
             }
         }

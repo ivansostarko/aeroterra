@@ -18,12 +18,13 @@ namespace AeroTerra.UI
                     Title(area, "KEYBOARD");
                     Key(area, "W", 0.28f, 0.68f); Key(area, "S", 0.28f, 0.50f);
                     Key(area, "A", 0.16f, 0.50f); Key(area, "D", 0.40f, 0.50f);
-                    Note(area, "W/S throttle · A/D yaw", 0.05f, 0.36f);
+                    Note(area, "W/S pitch fwd/back · A/D roll left/right", 0.05f, 0.36f);
                     Key(area, "▲", 0.72f, 0.68f); Key(area, "▼", 0.72f, 0.50f);
-                    Key(area, "◄", 0.60f, 0.50f); Key(area, "►", 0.84f, 0.50f);
-                    Note(area, "Arrows: fly fwd/back & left/right", 0.55f, 0.36f);
-                    Note(area, "SHIFT boost · SPACE brake/hover", 0.05f, 0.20f);
-                    Note(area, "C camera · R reset · ESC pause", 0.05f, 0.08f);
+                    Note(area, "Arrows: throttle up/down", 0.55f, 0.36f);
+                    Note(area, "Q: alt forward key", 0.05f, 0.20f);
+                    Note(area, "K: alt roll-right key", 0.55f, 0.20f);
+                    Note(area, "SHIFT boost · SPACE brake/hover", 0.05f, 0.08f);
+                    Note(area, "C camera · R reset · ESC pause · F8 photo mode", 0.55f, 0.08f);
                     break;
 
                 case ControlScheme.Gamepad:
