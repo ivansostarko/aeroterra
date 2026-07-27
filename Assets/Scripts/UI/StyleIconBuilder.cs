@@ -5,19 +5,25 @@ using AeroTerra.Core;
 namespace AeroTerra.UI
 {
     /// <summary>
-    /// Procedural placeholder card art for each map style (Liberty/Terrain/Satellite/OSM/Dark)
-    /// shown on the Settings ▸ Map style cards. Drop a real Sprite at
-    /// Assets/Resources/MapStyleIcons/{StyleName}.png (e.g. MapStyleIcons/Satellite.png) to
-    /// override any style's placeholder — same override pattern as MapIconBuilder.
+    /// Card art for each map style (Liberty/Terrain/Satellite/OSM/Dark) shown on the
+    /// Settings ▸ Map style cards. Loads the real icon from
+    /// Assets/Resources/Images/ui/Maps/{style}_map_icon.png when present, falling back
+    /// to a procedural placeholder otherwise (same override spirit as MapIconBuilder).
     /// </summary>
     public static class StyleIconBuilder
     {
         private static readonly Dictionary<MapStyle, Sprite> _cache = new Dictionary<MapStyle, Sprite>();
 
+        private static string IconFileName(MapStyle style) => style switch
+        {
+            MapStyle.OsmStandard => "osm_map_icon",
+            _ => style.ToString().ToLowerInvariant() + "_map_icon",
+        };
+
         public static Sprite GetIcon(MapStyle style)
         {
             if (_cache.TryGetValue(style, out var cached) && cached != null) return cached;
-            var overridden = Resources.Load<Sprite>("MapStyleIcons/" + style);
+            var overridden = Resources.Load<Sprite>("Images/ui/Maps/" + IconFileName(style));
             var sprite = overridden != null ? overridden : Build(style);
             _cache[style] = sprite;
             return sprite;

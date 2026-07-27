@@ -1,18 +1,24 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using AeroTerra.Core;
 
 namespace AeroTerra.UI
 {
-    /// <summary>Flight camera view, cycled with InputManager.CameraAction (key C).</summary>
-    public enum CamMode { Chase, Front, Bottom, Thermal }
+    /// <summary>Flight camera view, cycled with InputManager.CameraAction (key C).
+    /// Photo is NOT part of that cycle — it's a separate detached mode toggled with
+    /// InputManager.PhotoModeAction (key O), see DroneCameraRig.TogglePhotoMode.</summary>
+    public enum CamMode { Chase, Front, Bottom, Thermal, Photo }
 
     /// <summary>
-    /// Drives the single flight Camera through four view modes: smooth 3rd-person
-    /// chase (default), nose-mounted front view, belly-mounted surveillance/bombing
-    /// view, and a stylized thermal look layered on the front view via a URP color
-    /// grading Volume. Notifies FlightHUD on every mode change so its overlay matches.
+    /// Drives the single flight Camera through four attached view modes: smooth
+    /// 3rd-person chase (default), nose-mounted front view, belly-mounted surveillance/
+    /// bombing view, and a stylized thermal look layered on the front view via a URP
+    /// color grading Volume — plus a fifth, detached Photo mode: a free-fly camera with
+    /// mouse-look, WASD/QE movement, and live FOV/exposure controls (see
+    /// UpdatePhotoMode), for composing shots away from the drone's own flight path.
+    /// Notifies FlightHUD on every mode change so its overlay matches.
     /// </summary>
     public class DroneCameraRig : MonoBehaviour
     {
@@ -46,6 +52,18 @@ namespace AeroTerra.UI
         private float _noseOffset = 0.4f, _bellyOffset = 0.3f, _aimHeight = 1f;
 
         private float _shakeMagnitude, _shakeDuration, _shakeTimer;
+
+        // Photo mode — see TogglePhotoMode/UpdatePhotoMode.
+        private bool _photoActive;
+        private CamMode _prePhotoMode;
+        private float _photoYaw, _photoPitch;
+        private float _photoExposureEv;
+        private Volume _photoVolume;
+        private ColorAdjustments _photoColor;
+        private const float PhotoMoveSpeed = 6f, PhotoMoveSpeedFast = 18f;
+        private const float PhotoLookSensitivity = 0.15f;
+        private const float PhotoFovMin = 20f, PhotoFovMax = 100f;
+        private const float PhotoExposureMin = -3f, PhotoExposureMax = 3f;
 
         private void Awake() => Instance = this;
 
@@ -98,17 +116,39 @@ namespace AeroTerra.UI
             _thermalVolume.isGlobal = true;
             _thermalVolume.weight = 0f;
             _thermalVolume.profile = profile;
+
+            // Separate, minimal Volume for Photo mode's exposure slider — kept apart from
+            // the thermal profile above so the two can't fight over ColorAdjustments (only
+            // one of Thermal/Photo is ever active at once via Mode, but sharing a profile
+            // would still mean each mode's Start()-time Override calls stomp the other's).
+            var photoProfile = ScriptableObject.CreateInstance<VolumeProfile>();
+            _photoColor = photoProfile.Add<ColorAdjustments>(true);
+            _photoColor.postExposure.Override(0f);
+
+            var photoVolumeGo = new GameObject("PhotoVolume");
+            photoVolumeGo.transform.SetParent(transform, false);
+            _photoVolume = photoVolumeGo.AddComponent<Volume>();
+            _photoVolume.isGlobal = true;
+            _photoVolume.weight = 0f;
+            _photoVolume.profile = photoProfile;
         }
 
         private void Update()
         {
             var im = AeroTerra.Input.InputManager.Instance;
-            if (im == null || !im.CameraAction.WasPressedThisFrame()) return;
+            if (im == null) return;
+
+            if (im.PhotoModeAction.WasPressedThisFrame()) TogglePhotoMode();
+            if (_photoActive) return; // C-cycle is disabled while the detached camera is active — O exits it
+
+            if (!im.CameraAction.WasPressedThisFrame()) return;
 
             // Skip modes the airframe has no camera for — a drone with only a front
             // camera never lands on Bottom, one with front+back cycles both. Chase
             // is the external spectator view, not a physical camera, so it's always
             // reachable regardless of loadout (worst case the loop lands back on it).
+            // Bounded to the first 4 CamMode values only — Photo is never reached via
+            // this cycle, only via TogglePhotoMode.
             CamMode next = Mode;
             for (int i = 0; i < 4; i++)
             {
@@ -119,6 +159,32 @@ namespace AeroTerra.UI
 
             _thermalVolume.weight = Mode == CamMode.Thermal ? 1f : 0f;
             FlightHUD.Instance?.SetCameraMode(Mode);
+        }
+
+        /// <summary>Enters/exits the detached free-fly Photo mode (key O), remembering
+        /// whichever attached mode was active so exiting restores it exactly rather than
+        /// always dropping back to Chase.</summary>
+        private void TogglePhotoMode()
+        {
+            _photoActive = !_photoActive;
+            if (_photoActive)
+            {
+                _prePhotoMode = Mode;
+                Mode = CamMode.Photo;
+                Vector3 euler = transform.eulerAngles;
+                _photoYaw = euler.y;
+                _photoPitch = euler.x > 180f ? euler.x - 360f : euler.x;
+                _photoExposureEv = 0f;
+                _photoColor.postExposure.Override(0f);
+                _photoVolume.weight = 1f;
+            }
+            else
+            {
+                Mode = _prePhotoMode;
+                _photoVolume.weight = 0f;
+            }
+            FlightHUD.Instance?.SetCameraMode(Mode);
+            FlightHUD.Instance?.SetPhotoModeActive(_photoActive);
         }
 
         /// <summary>Thermal is a genuine "sees in the dark" sensor — at night (when the
@@ -224,6 +290,8 @@ namespace AeroTerra.UI
             if (Target == null) return;
             if (!_configured) ConfigureForTarget();
 
+            if (Mode == CamMode.Photo) { UpdatePhotoMode(); return; }
+
             if (Mode == CamMode.Thermal) UpdateThermalIntensity();
 
             switch (Mode)
@@ -263,6 +331,56 @@ namespace AeroTerra.UI
 
             ApplySpeedFov();
             ApplyShake();
+        }
+
+        /// <summary>Photo mode's per-frame drive: right-mouse-held look (yaw/pitch, no
+        /// roll — matches every other camera mode staying level), WASD + Q/E fly
+        /// (forward/right/up relative to the camera's own current facing, Shift for a
+        /// fast-move multiplier), [ / ] for live FOV, and - / = for exposure (EV, via
+        /// the dedicated _photoVolume's ColorAdjustments.postExposure — see Start()).
+        /// Doesn't touch Time.timeScale — the drone keeps flying under whatever input
+        /// is still held, same as detaching a camera drone from a moving subject rather
+        /// than pausing the world to take the shot.</summary>
+        private void UpdatePhotoMode()
+        {
+            var mouse = Mouse.current;
+            if (mouse != null && mouse.rightButton.isPressed)
+            {
+                Vector2 delta = mouse.delta.ReadValue() * PhotoLookSensitivity;
+                _photoYaw += delta.x;
+                _photoPitch = Mathf.Clamp(_photoPitch - delta.y, -85f, 85f);
+            }
+            transform.rotation = Quaternion.Euler(_photoPitch, _photoYaw, 0f);
+
+            var kb = Keyboard.current;
+            if (kb != null)
+            {
+                Vector3 move = Vector3.zero;
+                if (kb.wKey.isPressed) move += transform.forward;
+                if (kb.sKey.isPressed) move -= transform.forward;
+                if (kb.aKey.isPressed) move -= transform.right;
+                if (kb.dKey.isPressed) move += transform.right;
+                if (kb.eKey.isPressed) move += Vector3.up;
+                if (kb.qKey.isPressed) move -= Vector3.up;
+                if (move.sqrMagnitude > 0.0001f)
+                {
+                    float speed = kb.leftShiftKey.isPressed ? PhotoMoveSpeedFast : PhotoMoveSpeed;
+                    transform.position += move.normalized * speed * Time.unscaledDeltaTime;
+                }
+
+                if (kb.leftBracketKey.isPressed)
+                    _cam.fieldOfView = Mathf.Clamp(_cam.fieldOfView - 30f * Time.unscaledDeltaTime, PhotoFovMin, PhotoFovMax);
+                if (kb.rightBracketKey.isPressed)
+                    _cam.fieldOfView = Mathf.Clamp(_cam.fieldOfView + 30f * Time.unscaledDeltaTime, PhotoFovMin, PhotoFovMax);
+
+                if (kb.minusKey.isPressed)
+                    _photoExposureEv = Mathf.Clamp(_photoExposureEv - 1.5f * Time.unscaledDeltaTime, PhotoExposureMin, PhotoExposureMax);
+                if (kb.equalsKey.isPressed)
+                    _photoExposureEv = Mathf.Clamp(_photoExposureEv + 1.5f * Time.unscaledDeltaTime, PhotoExposureMin, PhotoExposureMax);
+                _photoColor.postExposure.Override(_photoExposureEv);
+            }
+
+            FlightHUD.Instance?.UpdatePhotoModeReadout(_cam.fieldOfView, _photoExposureEv);
         }
 
         /// <summary>Widens FOV with speed — a cheap, well-worn "sense of speed" trick

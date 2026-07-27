@@ -46,29 +46,43 @@ namespace AeroTerra.EditorTools
                 AssetDatabase.CreateFolder("Assets/Resources", "Maps");
 
             // Spawn points are named public parks in each city (roomy, obstruction-free
-            // launch areas) at a shared 350 m default spawn altitude.
+            // launch areas) at a shared 350 m default spawn altitude. Landmarks are shown
+            // as bearing markers on the Flight HUD's NAV minimap (MapDefinition.Landmark) —
+            // real-world coordinates, approximate (a few hundred meters of slack is fine at
+            // minimap scale), named to match each city's Description text above.
             CreateMap("london", "London", "United Kingdom", 51.5073, -0.1657, 350,
-                "Fly over the Thames, Tower Bridge, Canary Wharf and Westminster."); // Starting Spot: Hyde Park
+                "Fly over the Thames, Tower Bridge, Canary Wharf and Westminster.", // Starting Spot: Hyde Park
+                Landmark("Tower Bridge", 51.5055, -0.0754), Landmark("Big Ben", 51.5007, -0.1246));
             CreateMap("dubai", "Dubai", "United Arab Emirates", 24.8500, 55.6000, 350,
-                "Fly around Burj Khalifa, Palm Jumeirah and Dubai Marina."); // Starting Spot: Al Qudra Lakes
+                "Fly around Burj Khalifa, Palm Jumeirah and Dubai Marina.", // Starting Spot: Al Qudra Lakes
+                Landmark("Burj Khalifa", 25.1972, 55.2744), Landmark("Palm Jumeirah", 25.1124, 55.1390));
             CreateMap("zagreb", "Zagreb", "Croatia", 45.8250, 16.0200, 350,
-                "Fly over Ban Jelačić Square, Zagreb Cathedral and the Sava riverfront."); // Starting Spot: Maksimir Park
+                "Fly over Ban Jelačić Square, Zagreb Cathedral and the Sava riverfront.", // Starting Spot: Maksimir Park
+                Landmark("Zagreb Cathedral", 45.8150, 15.9785), Landmark("Ban Jelačić Square", 45.8131, 15.9776));
             CreateMap("new-york", "New York", "United States", 40.7460, -73.8450, 350,
-                "Fly through Manhattan past the Empire State Building, Central Park and the Statue of Liberty."); // Starting Spot: Flushing Meadows–Corona Park
+                "Fly through Manhattan past the Empire State Building, Central Park and the Statue of Liberty.", // Starting Spot: Flushing Meadows–Corona Park
+                Landmark("Empire State Building", 40.7484, -73.9857), Landmark("Statue of Liberty", 40.6892, -74.0445));
             CreateMap("tokyo", "Tokyo", "Japan", 35.6720, 139.6977, 350,
-                "Fly over Tokyo Tower, Shibuya Crossing and the Imperial Palace grounds."); // Starting Spot: Yoyogi Park
+                "Fly over Tokyo Tower, Shibuya Crossing and the Imperial Palace grounds.", // Starting Spot: Yoyogi Park
+                Landmark("Tokyo Tower", 35.6586, 139.7454), Landmark("Shibuya Crossing", 35.6595, 139.7005));
             CreateMap("paris", "Paris", "France", 48.8624, 2.2490, 350,
-                "Fly past the Eiffel Tower, Arc de Triomphe and along the Seine."); // Starting Spot: Bois de Boulogne
+                "Fly past the Eiffel Tower, Arc de Triomphe and along the Seine.", // Starting Spot: Bois de Boulogne
+                Landmark("Eiffel Tower", 48.8584, 2.2945), Landmark("Arc de Triomphe", 48.8738, 2.2950));
             CreateMap("riyadh", "Riyadh", "Saudi Arabia", 24.8000, 46.7000, 350,
-                "Fly over Kingdom Centre Tower, Al Faisaliah and the King Abdullah Financial District."); // Starting Spot: King Abdullah Park
+                "Fly over Kingdom Centre Tower, Al Faisaliah and the King Abdullah Financial District.", // Starting Spot: King Abdullah Park
+                Landmark("Kingdom Centre", 24.7116, 46.6753), Landmark("Al Faisaliah Tower", 24.6914, 46.6851));
             CreateMap("barcelona", "Barcelona", "Spain", 41.3880, 2.1870, 350,
-                "Fly over Sagrada Família, Park Güell and the Barcelona waterfront."); // Starting Spot: Parc de la Ciutadella
+                "Fly over Sagrada Família, Park Güell and the Barcelona waterfront.", // Starting Spot: Parc de la Ciutadella
+                Landmark("Sagrada Família", 41.4036, 2.1744), Landmark("Park Güell", 41.4145, 2.1527));
 
             AssetDatabase.SaveAssets();
         }
 
+        private static MapDefinition.Landmark Landmark(string name, double lat, double lon) =>
+            new MapDefinition.Landmark { Name = name, Latitude = lat, Longitude = lon };
+
         private static void CreateMap(string id, string displayName, string country,
-            double lat, double lon, double spawnAltM, string description)
+            double lat, double lon, double spawnAltM, string description, params MapDefinition.Landmark[] landmarks)
         {
             var path = $"{MapDir}/{id}.asset";
             if (AssetDatabase.LoadAssetAtPath<MapDefinition>(path) != null) return; // don't clobber edits
@@ -77,6 +91,7 @@ namespace AeroTerra.EditorTools
             map.Id = id; map.DisplayName = displayName; map.Country = country;
             map.Latitude = lat; map.Longitude = lon; map.SpawnAltitudeMeters = spawnAltM;
             map.Description = description;
+            map.Landmarks = landmarks;
             AssetDatabase.CreateAsset(map, path);
         }
 

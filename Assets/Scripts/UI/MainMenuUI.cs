@@ -18,6 +18,7 @@ namespace AeroTerra.UI
         private WorkshopUI _workshop;
         private CreditsUI _credits;
         private SettingsUI _settings;
+        private MediaUI _media;
 
         private void Start()
         {
@@ -29,6 +30,7 @@ namespace AeroTerra.UI
             _workshop = gameObject.AddComponent<WorkshopUI>();
             _credits = gameObject.AddComponent<CreditsUI>();
             _settings = gameObject.AddComponent<SettingsUI>();
+            _media = gameObject.AddComponent<MediaUI>();
             AudioManager.Instance?.PlayMenuMusic();
         }
 
@@ -177,6 +179,8 @@ namespace AeroTerra.UI
                     () => { _home.gameObject.SetActive(false); _credits.Open(ShowHome); }, PanelAlt, 28);
             var settingsBtn = Button_(_home, "SETTINGS", new Vector2(0.34f, 0.145f), new Vector2(0.66f, 0.22f),
                     () => { _home.gameObject.SetActive(false); _settings.Open(ShowHome); }, PanelAlt, 28);
+            var mediaBtn = Button_(_home, "MEDIA", new Vector2(0.34f, 0.055f), new Vector2(0.66f, 0.13f),
+                    () => { _home.gameObject.SetActive(false); _media.Open(ShowHome); }, PanelAlt, 28);
 
             // Quit is a secondary action — kept small and out of the primary flow.
             var quitBtn = Button_(_home, "QUIT", new Vector2(0.85f, 0.04f), new Vector2(0.97f, 0.09f),
@@ -186,7 +190,7 @@ namespace AeroTerra.UI
                   new Vector2(0.03f, 0.02f), new Vector2(0.7f, 0.06f), TextDim,
                   TMPro.TextAlignmentOptions.Left);
 
-            _homeButtons = new[] { freeFlightBtn, missionsBtn, workshopBtn, creditsBtn, settingsBtn, quitBtn };
+            _homeButtons = new[] { freeFlightBtn, missionsBtn, workshopBtn, creditsBtn, settingsBtn, mediaBtn, quitBtn };
             _homeIndex = 0;
             SetSelectionVisual(_homeButtons, _homeIndex);
         }

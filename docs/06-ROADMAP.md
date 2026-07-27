@@ -4,23 +4,19 @@ Near-term
 - Real recorded engine audio per drone (replace procedural fallback)
 - More cities (the menu auto-populates from `MapDefinition.All`)
 - Windsock/flag prop at spawn points showing live wind direction at a glance
-- Low battery/fuel HUD warning (flashing readout + audio cue) before auto-cutoff
 - Colorblind-friendly HUD palette option in Settings ▸ Display
-- Screenshot metadata overlay (drone name, city, date/time, altitude) — pairs with the replay/screenshot mode above
-- Drone stat-comparison view in Free Flight/Workshop (overlay two airframes' star ratings side by side)
 - Sort/filter additions to Free Flight's drone list (by top speed, range, mass) alongside the existing TYPE filter
 - Quick-swap hotkey mid-session to cycle saved custom builds without returning to the menu
 - Landing/takeoff smoothness scorer (vertical speed at touchdown, drift) — standalone HUD readout, reusable later by Missions scoring
 - Continuous time-of-day slider in Settings ▸ Map, instead of only the 4 SkyPreset stops
 - Damage decals on the drone body scaling with AirframeHP loss (scratches → sparks → smoke) instead of just a numeric HP value
-- Per-drone flight log (hours flown, distance, landings) shown in the Workshop's SPECS tab
-- In-flight minimap (top-down, Cesium-position-driven) showing nearby landmarks and the spawn point
 - Training content for the Missions ▸ Training card: guided first-flight lessons per flight model (multirotor hover/land, fixed-wing takeoff/stall recovery, VTOL transition)
-- Camera photo-mode: free-fly detached camera with exposure/FOV controls, building on the existing camera-cycle system
 - Settings ▸ Audio per-category test-tone buttons (hear Music/SFX/Voice volume before saving)
 - Wind-affected hover drift visualization (a small on-HUD vector arrow showing how much WeatherSystem's wind is pushing the drone off station)
 - Workshop "randomize loadout" button (random skin + main color + power tier) for quickly previewing variety
-- Per-map points-of-interest labels toggle (Eiffel Tower, Burj Khalifa, etc.) driven off MapDefinition's existing description text
+- Per-map points-of-interest labels toggle (Eiffel Tower, Burj Khalifa, etc.) on the 3D map itself — now backed by structured `MapDefinition.Landmarks` (see the Flight HUD's NAV minimap markers) instead of parsing description text, but there's still no in-world/on-map overlay UI for them
+- Drone stat-comparison view in Free Flight's drone picker (Workshop's Specs tab already has one — "⇄ COMPARE WITH ANOTHER AIRFRAME")
+- Real top-down minimap camera (a second Cesium-streaming RenderTexture view, same pattern as WorkshopUI's stage camera) instead of the current stylized bearing-marker instrument
 
 Mid-term
 - Missions: cargo delivery routes with scoring (time, battery, landing precision)

@@ -24,6 +24,37 @@ namespace AeroTerra.Core
         public double SpawnAltitudeMeters = 150;
         public float SpawnHeadingDeg = 0f; // yaw at spawn, 0 = north
 
+        /// <summary>Named real-world points shown as bearing markers on the Flight HUD's
+        /// NAV minimap (see FlightHUD.BuildMinimap) — purely flavor/orientation data, not
+        /// tied to any Cesium tileset metadata (none is queryable at runtime; see
+        /// FlatOffsetMeters below). Populated by ProjectBootstrap.CreateMaps for the stock
+        /// cities; add more directly on the .asset in the Inspector for any map.</summary>
+        [System.Serializable]
+        public class Landmark
+        {
+            public string Name;
+            public double Latitude;
+            public double Longitude;
+        }
+
+        [Header("Minimap landmarks")]
+        public Landmark[] Landmarks = System.Array.Empty<Landmark>();
+
+        /// <summary>Flat-earth local-tangent-plane approximation of a (lat,lon) point's
+        /// offset in meters from (originLat,originLon) — (+x = east, +y = north). Accurate
+        /// to well within HUD-minimap tolerances at the few-kilometer distances landmarks
+        /// sit at; matches the same simplification Cesium's own georeference uses for the
+        /// flat Unity world X/Z near the origin (see MapManager.BuildWorld), so it lines up
+        /// with the HOME marker's existing "world XZ ≈ meters from origin" convention.</summary>
+        public static Vector2 FlatOffsetMeters(double lat, double lon, double originLat, double originLon)
+        {
+            const double metersPerDegLat = 111320.0;
+            double metersPerDegLon = metersPerDegLat * System.Math.Cos(originLat * System.Math.PI / 180.0);
+            float east = (float)((lon - originLon) * metersPerDegLon);
+            float north = (float)((lat - originLat) * metersPerDegLat);
+            return new Vector2(east, north);
+        }
+
         private static MapDefinition[] _all;
 
         /// <summary>Every map asset under Resources/Maps, loaded once and cached.</summary>

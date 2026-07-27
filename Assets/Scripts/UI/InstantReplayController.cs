@@ -203,8 +203,22 @@ namespace AeroTerra.UI
         {
             string folder = Path.Combine(Application.persistentDataPath, "Screenshots");
             Directory.CreateDirectory(folder);
-            string fileName = $"AeroTerra_{System.DateTime.Now:yyyy-MM-dd_HH-mm-ss}.png";
+            string stamp = System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            string fileName = $"AeroTerra_{stamp}.png";
             ScreenCapture.CaptureScreenshot(Path.Combine(folder, fileName));
+
+            // Metadata overlay sidecar (drone/city/date-time/altitude) — same base name,
+            // .json instead of .png — read back by the Media screen's gallery (MediaUI).
+            var meta = new ScreenshotMeta
+            {
+                DroneName = _flight.Spec.DisplayName,
+                City = GameManager.Instance.SelectedMap != null ? GameManager.Instance.SelectedMap.DisplayName : "Unknown",
+                AltitudeM = _flight.transform.position.y,
+                CapturedAtIso = System.DateTime.Now.ToString("o"),
+            };
+            try { File.WriteAllText(Path.Combine(folder, $"AeroTerra_{stamp}.json"), JsonUtility.ToJson(meta, true)); }
+            catch (System.Exception e) { Debug.LogWarning($"[InstantReplayController] screenshot metadata write failed: {e.Message}"); }
+
             StartCoroutine(FlashAndToast(fileName));
         }
 

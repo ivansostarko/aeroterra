@@ -13,6 +13,7 @@ namespace AeroTerra.Core
     {
         private static string SettingsPath => Path.Combine(Application.persistentDataPath, "settings.json");
         private static string CustomDronesPath => Path.Combine(Application.persistentDataPath, "custom_drones.json");
+        private static string FlightLogPath => Path.Combine(Application.persistentDataPath, "flight_log.json");
 
         public static SettingsData LoadSettings()
         {
@@ -49,6 +50,26 @@ namespace AeroTerra.Core
         {
             try { File.WriteAllText(CustomDronesPath, JsonUtility.ToJson(new CustomDroneList { Items = drones }, true)); }
             catch (Exception e) { Debug.LogError($"[SaveSystem] custom drones save failed: {e.Message}"); }
+        }
+
+        [Serializable] private class FlightLogList { public List<Workshop.DroneFlightLog> Items = new List<Workshop.DroneFlightLog>(); }
+
+        public static List<Workshop.DroneFlightLog> LoadFlightLogs()
+        {
+            try
+            {
+                if (File.Exists(FlightLogPath))
+                    return JsonUtility.FromJson<FlightLogList>(File.ReadAllText(FlightLogPath))?.Items
+                           ?? new List<Workshop.DroneFlightLog>();
+            }
+            catch (Exception e) { Debug.LogWarning($"[SaveSystem] flight log load failed: {e.Message}"); }
+            return new List<Workshop.DroneFlightLog>();
+        }
+
+        public static void SaveFlightLogs(List<Workshop.DroneFlightLog> logs)
+        {
+            try { File.WriteAllText(FlightLogPath, JsonUtility.ToJson(new FlightLogList { Items = logs }, true)); }
+            catch (Exception e) { Debug.LogError($"[SaveSystem] flight log save failed: {e.Message}"); }
         }
     }
 }

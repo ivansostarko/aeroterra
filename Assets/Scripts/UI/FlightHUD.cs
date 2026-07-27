@@ -50,7 +50,17 @@ namespace AeroTerra.UI
         private const float MinimapRangeM = 400f;
         private const float MinimapRadiusPx = 58f;
 
+        // Landmark bearing markers (MapDefinition.Landmarks) — offsets computed once at
+        // Init (landmarks/map don't change mid-flight), positions re-derived every frame
+        // the same off-scale-clamp way the HOME marker already is.
+        private RectTransform[] _minimapLandmarks;
+        private Vector2[] _minimapLandmarkOffsetsM;
+
+        private RectTransform _photoPanel;
+        private TMPro.TextMeshProUGUI _photoReadout;
+
         private float _fpsSmoothed = 60f;
+        private float _lowPowerBeepTimer;
 
         public void Init(Canvas canvas, DroneFlightController flight)
         {
@@ -71,6 +81,8 @@ namespace AeroTerra.UI
 
             _warning = Label(_root, "", 34, new Vector2(0.2f, 0.83f), new Vector2(0.8f, 0.89f),
                              AccentWarn, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+
+            BuildPhotoModeOverlay();
 
             SetCameraMode(CamMode.Chase);
             SetVisible(GameManager.Instance.Settings.ShowHud);
@@ -380,6 +392,51 @@ namespace AeroTerra.UI
                    new Vector2(-3f, -3f), new Vector2(3f, 3f));
             _minimapNose = Panel_(box, "Nose", TextMain, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                                   new Vector2(-1f, 0f), new Vector2(1f, 14f));
+
+            BuildMinimapLandmarks(box);
+        }
+
+        /// <summary>One small diamond + name tag per MapDefinition.Landmark on the current
+        /// map — same off-scale ring-edge clamp treatment as the HOME marker (most real
+        /// landmarks sit well outside MinimapRangeM, so this mainly reads as "which
+        /// direction to fly," same as HOME already does past 400 m). Offsets are computed
+        /// once here via the flat-earth approximation (MapDefinition.FlatOffsetMeters) since
+        /// neither the map nor its landmarks change mid-flight.</summary>
+        private void BuildMinimapLandmarks(Transform box)
+        {
+            var map = GameManager.Instance != null ? GameManager.Instance.SelectedMap : null;
+            var landmarks = map != null ? map.Landmarks : null;
+            if (landmarks == null || landmarks.Length == 0)
+            {
+                _minimapLandmarks = System.Array.Empty<RectTransform>();
+                _minimapLandmarkOffsetsM = System.Array.Empty<Vector2>();
+                return;
+            }
+
+            _minimapLandmarks = new RectTransform[landmarks.Length];
+            _minimapLandmarkOffsetsM = new Vector2[landmarks.Length];
+            for (int i = 0; i < landmarks.Length; i++)
+            {
+                var lm = landmarks[i];
+                _minimapLandmarkOffsetsM[i] = MapDefinition.FlatOffsetMeters(
+                    lm.Latitude, lm.Longitude, map.Latitude, map.Longitude);
+
+                var marker = Panel_(box, "Landmark_" + lm.Name, Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                    new Vector2(-3f, -3f), new Vector2(3f, 3f));
+                marker.localRotation = Quaternion.Euler(0, 0, 45f);
+                marker.GetComponent<UnityEngine.UI.Image>().raycastTarget = false;
+                _minimapLandmarks[i] = marker;
+
+                var label = Label(marker, lm.Name, 8, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                  Accent, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+                label.enableWordWrapping = false;
+                label.raycastTarget = false;
+                var labelRt = label.rectTransform;
+                labelRt.localRotation = Quaternion.Euler(0, 0, -45f); // counter the diamond's rotation
+                labelRt.pivot = new Vector2(0.5f, 0f);
+                labelRt.sizeDelta = new Vector2(70f, 12f);
+                labelRt.anchoredPosition = new Vector2(0f, 5f);
+            }
         }
 
         private void BuildFpsCounter()
@@ -388,7 +445,34 @@ namespace AeroTerra.UI
                               TextDim, TMPro.TextAlignmentOptions.Right, TMPro.FontStyles.Bold);
         }
 
-        /// <summary>Called by DroneCameraRig on every camera-mode change (key C).</summary>
+        /// <summary>Bottom-center control-hint bar + live FOV/exposure readout, shown only
+        /// while DroneCameraRig's detached Photo mode is active (see SetPhotoModeActive/
+        /// UpdatePhotoModeReadout, driven every frame from DroneCameraRig.UpdatePhotoMode).</summary>
+        private void BuildPhotoModeOverlay()
+        {
+            _photoPanel = Panel_(_root, "PhotoModeBar", new Color(0, 0, 0, 0.55f),
+                                 new Vector2(0.24f, 0.02f), new Vector2(0.76f, 0.095f));
+            Label(_photoPanel, "PHOTO MODE", 15, new Vector2(0.03f, 0.52f), new Vector2(0.30f, 0.94f),
+                  Accent, TMPro.TextAlignmentOptions.MidlineLeft, TMPro.FontStyles.Bold);
+            _photoReadout = Label(_photoPanel, "", 13, new Vector2(0.03f, 0.05f), new Vector2(0.30f, 0.50f),
+                                  TextDim, TMPro.TextAlignmentOptions.MidlineLeft);
+            Label(_photoPanel, "RMB LOOK · WASD MOVE · Q/E UP-DOWN · SHIFT FAST · [ ] FOV · − = EXPOSURE · O EXIT",
+                  11, new Vector2(0.32f, 0f), new Vector2(0.98f, 1f), TextDim, TMPro.TextAlignmentOptions.MidlineLeft);
+            _photoPanel.gameObject.SetActive(false);
+        }
+
+        /// <summary>Called by DroneCameraRig.TogglePhotoMode on every enter/exit.</summary>
+        public void SetPhotoModeActive(bool active) => _photoPanel.gameObject.SetActive(active);
+
+        /// <summary>Called every LateUpdate while Photo mode is active — see
+        /// DroneCameraRig.UpdatePhotoMode.</summary>
+        public void UpdatePhotoModeReadout(float fov, float exposureEv)
+        {
+            if (_photoReadout != null) _photoReadout.text = $"FOV {fov:0}°   EV {exposureEv:+0.0;-0.0;0.0}";
+        }
+
+        /// <summary>Called by DroneCameraRig on every camera-mode change (key C, or O for
+        /// Photo — see TogglePhotoMode).</summary>
         public void SetCameraMode(CamMode mode)
         {
             _camModeLabel.text = mode switch
@@ -396,10 +480,11 @@ namespace AeroTerra.UI
                 CamMode.Front => "FRONT",
                 CamMode.Bottom => "BOTTOM — SURVEILLANCE",
                 CamMode.Thermal => "THERMAL",
+                CamMode.Photo => "PHOTO",
                 _ => "CHASE",
             };
 
-            bool showReticle = mode != CamMode.Chase;
+            bool showReticle = mode != CamMode.Chase && mode != CamMode.Photo;
             _reticleCross.gameObject.SetActive(showReticle);
             _reticleV.gameObject.SetActive(showReticle);
             foreach (var c in _reticleCorners) c.gameObject.SetActive(mode == CamMode.Bottom);
@@ -535,6 +620,19 @@ namespace AeroTerra.UI
                 _minimapNose.localEulerAngles = new Vector3(0, 0, -heading);
                 _minimapDistLabel.text = homeDistM < 1000f
                     ? $"HOME {homeDistM:0} m" : $"HOME {homeDistM / 1000f:0.0} km";
+
+                if (_minimapLandmarks != null)
+                {
+                    // Landmark offsets are stored relative to the map origin (world XZ);
+                    // homeOffsetM is "origin minus drone," so adding it re-bases the same
+                    // offset onto "landmark minus drone" — the vector the marker needs.
+                    for (int i = 0; i < _minimapLandmarks.Length; i++)
+                    {
+                        Vector2 lmRaw = (_minimapLandmarkOffsetsM[i] + homeOffsetM) * scale;
+                        _minimapLandmarks[i].anchoredPosition = lmRaw.magnitude > MinimapRadiusPx
+                            ? lmRaw.normalized * MinimapRadiusPx : lmRaw;
+                    }
+                }
             }
 
             if (_fpsLabel != null)
@@ -556,9 +654,33 @@ namespace AeroTerra.UI
             // priority than the depleted/low-power warnings above it.
             float tempC = GameManager.Instance.Settings.TemperatureC;
             bool batteryDerated = !fuelPowered && BatterySystem.PerformanceFactor(tempC) < 0.95f;
+            bool lowPower = !powerEmpty && powerPct < 0.15f;
             _warning.text = powerEmpty ? $"{powerLabel} DEPLETED"
-                          : powerPct < 0.15f ? $"LOW {powerLabel} — RETURN NOW"
+                          : lowPower ? $"LOW {powerLabel} — RETURN NOW"
                           : batteryDerated ? $"BATTERY {(tempC < 5f ? "COLD" : "OVERHEATING")} — REDUCED THRUST" : "";
+
+            // Flashing readout + periodic audio cue while low/depleted — the plain
+            // static banner above was easy to miss mid-flight; auto-cutoff (thrust
+            // stopping once IsEmpty, see DroneFlightController.FixedUpdate) follows
+            // shortly after LOW first shows, so this is the "before auto-cutoff" alert.
+            bool warnFlashing = powerEmpty || lowPower;
+            var warnColor = _warning.color;
+            warnColor.a = warnFlashing ? Mathf.Lerp(0.35f, 1f, Mathf.PingPong(Time.unscaledTime * 2.2f, 1f)) : 1f;
+            _warning.color = warnColor;
+
+            if (lowPower)
+            {
+                _lowPowerBeepTimer -= Time.unscaledDeltaTime;
+                if (_lowPowerBeepTimer <= 0f)
+                {
+                    _lowPowerBeepTimer = 4f;
+                    AudioManager.Instance?.PlayLowPowerWarning();
+                }
+            }
+            else
+            {
+                _lowPowerBeepTimer = 0f; // next time it drops low, beep immediately
+            }
         }
     }
 }

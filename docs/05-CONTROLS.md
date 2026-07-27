@@ -10,6 +10,7 @@
 | Boost (extra thrust/speed, drains battery faster) | Left Shift | RT | — |
 | Brake (multirotor: hard stop + hover-hold · fixed-wing: airbrake) | Space | LT | — |
 | Camera (cycle chase → front → bottom → thermal) | C | Y | On-screen button |
+| Photo mode (detached free-fly camera, press again to exit) | O | D-pad ↓ | On-screen button |
 | Drop payload (cargo pod / next munition) | I | X | On-screen button |
 | Toggle smoke screen (if equipped in the Workshop) | U | A / South | On-screen button |
 | Reset drone | R | B | On-screen button |
@@ -20,7 +21,7 @@
 All of these (except Pause) can be rebound in Settings ▸ Controls.
 
 ## Wind indicator, minimap & instant replay
-- The HUD's left column shows a **wind dial** below the compass — a needle pointing the direction the wind is currently blowing *toward* (windsock convention) plus its current speed in m/s (Settings ▸ Flying Conditions' WIND SPEED slider, whatever it's set to). The right column shows a **NAV minimap** — a north-up radar readout with a HOME marker (bearing + distance back to the map's spawn point), clamped to the ring's edge once you're more than 400 m out.
+- The HUD's left column shows a **wind dial** below the compass — a needle pointing the direction the wind is currently blowing *toward* (windsock convention) plus its current speed in m/s (Settings ▸ Flying Conditions' WIND SPEED slider, whatever it's set to). The right column shows a **NAV minimap** — a north-up radar readout with a HOME marker (bearing + distance back to the map's spawn point) and, if the current map defines any (`MapDefinition.Landmarks`), small named **landmark markers** for nearby real-world points of interest — both clamped to the ring's edge once they're more than 400 m out, same off-scale-radar behavior.
 - **Screenshot** saves a PNG to `Application.persistentDataPath/Screenshots/` with a timestamped filename, with a brief flash + on-screen confirmation.
 - **Instant Replay** freezes the live drone in place and flies a smoothed chase camera back along the last ~90 seconds of recorded flight, then resumes live control automatically (or press Replay again to cut it short). It's a rolling buffer, not a saved recording — nothing persists after you close the game.
 
@@ -62,7 +63,9 @@ costing you performance. Humidity is currently descriptive only — no flight-ph
 effect yet.
 
 ## Camera views
-Pressing the camera action cycles through four views: **chase** (smooth 3rd-person follow, default), **front** (nose-mounted, normal), **bottom** (belly-mounted, for surveillance and lining up a payload drop), and **thermal** (front-mounted with a stylized heat-look color grade). The chase camera tunes itself to the airframe — tight and snappy behind the racing quad, calm and level behind the cargo octocopter, far and banking-with-the-wings behind the big UAVs. The HUD's top strip shows the active view, and the center reticle changes with it (hidden in chase, a plain cross in front, red targeting brackets in bottom, a tinted cross in thermal).
+Pressing the camera action cycles through four attached views: **chase** (smooth 3rd-person follow, default), **front** (nose-mounted, normal), **bottom** (belly-mounted, for surveillance and lining up a payload drop), and **thermal** (front-mounted with a stylized heat-look color grade). The chase camera tunes itself to the airframe — tight and snappy behind the racing quad, calm and level behind the cargo octocopter, far and banking-with-the-wings behind the big UAVs. The HUD's top strip shows the active view, and the center reticle changes with it (hidden in chase, a plain cross in front, red targeting brackets in bottom, a tinted cross in thermal).
+
+**Photo mode** (O) detaches the camera from the drone entirely into a free-fly view for composing shots — it's not part of the cycle above, so C can't accidentally switch out of it, and pressing O again returns to whichever attached view you were in before. While active: hold the right mouse button and move the mouse to look around, WASD to fly relative to where you're facing, Q/E for straight down/up, Shift to move faster, `[`/`]` to narrow/widen the field of view, and `-`/`=` to adjust exposure (EV) via the same URP color-grading Volume the thermal view uses for its look. The drone keeps flying under whatever input is still held — Photo mode doesn't pause the world, so it reads as detaching a camera drone rather than freezing time.
 
 ## Payload drop
 - **AT-C1 Pelican** releases its cargo pod, which falls and lands with a dust puff and

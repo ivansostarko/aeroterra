@@ -35,6 +35,7 @@ namespace AeroTerra.Input
         public InputAction SmokeScreenAction { get; private set; }
         public InputAction ScreenshotAction { get; private set; }
         public InputAction ReplayAction { get; private set; }
+        public InputAction PhotoModeAction { get; private set; }
 
         /// <summary>Held-state helpers for the flight model (boost = sprint,
         /// brake = airbrake / hover-hold depending on airframe).</summary>
@@ -115,12 +116,19 @@ namespace AeroTerra.Input
             ReplayAction = new InputAction("Replay", InputActionType.Button, "<Keyboard>/f10");
             ReplayAction.AddBinding("<Gamepad>/dpad/up");
 
+            // Photo mode: detached free-fly camera (see DroneCameraRig.CamMode.Photo) —
+            // "O" for "phOto," not part of the C-cycle so it can't be accidentally cycled
+            // into mid-flight; dpad/down is the one face of the pad Replay's dpad/up
+            // hasn't claimed.
+            PhotoModeAction = new InputAction("PhotoMode", InputActionType.Button, "<Keyboard>/o");
+            PhotoModeAction.AddBinding("<Gamepad>/dpad/down");
+
             foreach (var a in AllActions()) a.Enable();
             ApplySavedOverrides();
         }
 
         public InputAction[] AllActions() => new[]
-            { ThrottleAction, PitchAction, RollAction, YawAction, PauseAction, CameraAction, ResetAction, PayloadDropAction, BoostAction, BrakeAction, SmokeScreenAction, ScreenshotAction, ReplayAction };
+            { ThrottleAction, PitchAction, RollAction, YawAction, PauseAction, CameraAction, ResetAction, PayloadDropAction, BoostAction, BrakeAction, SmokeScreenAction, ScreenshotAction, ReplayAction, PhotoModeAction };
 
         public void ApplyScheme(ControlScheme scheme)
         {

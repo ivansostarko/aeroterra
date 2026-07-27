@@ -71,8 +71,19 @@ namespace AeroTerra.Drone
         private const float CrashRespawnDelaySec = 2f;
         private const float BoostFactor = 1.3f;
 
+        private const float LandingCooldownSec = 2f; // suppresses repeat fires from resting/jittering ground contact
+
         private float _lastCrashTime = -999f;
+        private float _lastLandingTime = -999f;
         private bool _crashRespawnPending;
+
+        /// <summary>Fired on a gentle touchdown (below CrashSpeedThreshold — i.e. NOT a
+        /// hard crash), cooldown-gated same as the crash path. Used by FlightLogTracker
+        /// to count landings for the Workshop's per-drone flight log. Best-effort: any
+        /// collision under the threshold counts, including e.g. a wingtip scrape while
+        /// taxiing, not just a clean touchdown — there's no separate "on the ground"
+        /// state to check against.</summary>
+        public event System.Action Landed;
         private float _headingDeg;                    // multirotor commanded heading (yaw-rate integrated)
 
         /// <summary>True once a drone that ran out of usable power (battery empty, or
@@ -432,7 +443,15 @@ namespace AeroTerra.Drone
                 return;
             }
 
-            if (collision.relativeVelocity.magnitude < CrashSpeedThreshold) return;
+            if (collision.relativeVelocity.magnitude < CrashSpeedThreshold)
+            {
+                if (collision.relativeVelocity.magnitude > 0.4f && Time.time - _lastLandingTime > LandingCooldownSec)
+                {
+                    _lastLandingTime = Time.time;
+                    Landed?.Invoke();
+                }
+                return;
+            }
             if (Time.time - _lastCrashTime < CrashCooldownSec) return;
             _lastCrashTime = Time.time;
             AeroTerra.UI.NarratorController.Instance?.NotifyCrashed();

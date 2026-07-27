@@ -22,6 +22,7 @@ namespace AeroTerra.UI
         private SettingsUI _settingsUI;
         private NarratorController _narrator;
         private InstantReplayController _replay;
+        private FlightLogTracker _flightLog;
 
         private void Start()
         {
@@ -78,6 +79,9 @@ namespace AeroTerra.UI
 
             _replay = gameObject.AddComponent<InstantReplayController>();
             _replay.Init(_flightController, camRig, Camera.main, _canvas);
+
+            _flightLog = gameObject.AddComponent<FlightLogTracker>();
+            _flightLog.Init(_flightController);
         }
 
         private void Update()
@@ -149,7 +153,7 @@ namespace AeroTerra.UI
                   TextDim, TMPro.TextAlignmentOptions.Center);
 
             Button_(box, "OK", new Vector2(0.32f, 0.14f), new Vector2(0.68f, 0.32f),
-                    () => { Time.timeScale = 1f; GameManager.Instance.ReturnToMenu(); }, Accent, 22);
+                    () => { Time.timeScale = 1f; _flightLog?.Flush(); GameManager.Instance.ReturnToMenu(); }, Accent, 22);
         }
 
         private void ShowPauseMenu()
@@ -176,6 +180,7 @@ namespace AeroTerra.UI
             {
                 Time.timeScale = 1f;
                 AudioListener.pause = false; // this bypasses TogglePause(), which would otherwise do it
+                _flightLog?.Flush();
                 GameManager.Instance.ReturnToMenu();
             }, AccentWarn, 24);
         }

@@ -32,6 +32,9 @@ namespace AeroTerra.Core
         private AudioClip _bombDropClip, _bombExplosionClip;
         private bool _bombSfxLoaded;
         private AudioSource _voiceSource;
+        private AudioSource _warningSfxSource;
+        private AudioClip _lowPowerClip;
+        private bool _warningSfxLoaded;
 
         private void Awake()
         {
@@ -325,6 +328,32 @@ namespace AeroTerra.Core
             _bombSfxLoaded = true;
             _bombDropClip = Resources.Load<AudioClip>("Audio/sfx/bomb/bomb-drop");
             _bombExplosionClip = Resources.Load<AudioClip>("Audio/sfx/bomb/bomb-explosion");
+        }
+
+        /// <summary>
+        /// Repeating low-battery/fuel chirp, played by FlightHUD every few seconds while
+        /// the active power source is below its low-power threshold (see FlightHUD.Update,
+        /// AccentWarn-flashing "LOW BAT/FUEL — RETURN NOW" banner). A plain 2D one-shot,
+        /// not ignoreListenerPause — unlike UI click/hover feedback, this warning belongs
+        /// to the live flight and should go silent along with everything else while paused.
+        /// File: Assets/Resources/Audio/sfx/warning/low-power-warning.mp3 — drop a short
+        /// beep/chime there; until then this silently no-ops, same as any other missing clip.
+        /// </summary>
+        public void PlayLowPowerWarning()
+        {
+            EnsureWarningSfxLoaded();
+            if (_lowPowerClip == null || _warningSfxSource == null) return;
+            _warningSfxSource.PlayOneShot(_lowPowerClip, SfxVolume01);
+        }
+
+        private void EnsureWarningSfxLoaded()
+        {
+            if (_warningSfxLoaded) return;
+            _warningSfxLoaded = true;
+            _lowPowerClip = Resources.Load<AudioClip>("Audio/sfx/warning/low-power-warning");
+            _warningSfxSource = gameObject.AddComponent<AudioSource>();
+            _warningSfxSource.playOnAwake = false;
+            _warningSfxSource.spatialBlend = 0f;
         }
     }
 }
