@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb0cca2f347f5e04fb52f6195426d2a0, type: 3}
+  m_Name: AT-B5_Kestrel
+  m_EditorClassIdentifier: 
+  Id: at-b5
+  DisplayName: AT-B5 Kestrel
+  Manufacturer: AeroTerra Dynamics
+  Class: 4
+  ModelKind: 4
+  Description: 'Medium-altitude twin-boom recon/strike UCAV inspired by the Bayraktar
+    TB2 silhouette: humped fuselage, chin EO gimbal, inward-canted tail fins and
+    four underwing guided munitions (simulated).'
+  EmptyMassKg: 26
+  WingspanM: 12
+  RotorCount: 1
+  AirframeHP: 180
+  MaxSpeedKmh: 220
+  MaxAscentRateMs: 8
+  MaxAltitudeM: 7600
+  MaxThrustN: 520
+  PitchRollTorque: 20
+  YawTorque: 8
+  LinearDrag: 0.45
+  AngularDrag: 3.5
+  BatteryOptionsWh:
+  - 2200
+  - 3200
+  - 4200
+  CruisePowerW: 850
+  PowerPerThrottleW: 1600
+  PayloadOptionsKg:
+  - 0
+  - 2
+  - 4
+  - 8
+  PayloadTypeName: Guided munitions (simulated)
+  PayloadKind: 2
+  EngineLoop: {fileID: 0}
+  EnginePitchMin: 0.7
+  EnginePitchMax: 1.5
+  EngineVolumeMax: 0.9
+  DefaultBodyColor: {r: 0.78, g: 0.79, b: 0.81, a: 1}
+  DefaultAccentColor: {r: 0.45, g: 0.12, b: 0.12, a: 1}
+  PayloadHardpoints: 4
+  HasFrontCamera: 1
+  HasBackCamera: 0

@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb0cca2f347f5e04fb52f6195426d2a0, type: 3}
+  m_Name: AT-P10_Pixel
+  m_EditorClassIdentifier: 
+  Id: at-p10
+  DisplayName: AT-P10 Pixel
+  Manufacturer: AeroTerra Dynamics
+  Class: 9
+  ModelKind: 9
+  Description: 'Pocketable consumer camera quad: folding arms, 2-axis gimbal camera,
+    belly vision sensors and a very forgiving flight controller. Built for photos,
+    not payloads.'
+  EmptyMassKg: 0.9
+  WingspanM: 0.38
+  RotorCount: 4
+  AirframeHP: 18
+  MaxSpeedKmh: 68
+  MaxAscentRateMs: 8
+  MaxAltitudeM: 4000
+  MaxThrustN: 24
+  PitchRollTorque: 7
+  YawTorque: 3
+  LinearDrag: 0.9
+  AngularDrag: 3.5
+  BatteryOptionsWh:
+  - 40
+  - 60
+  - 80
+  CruisePowerW: 90
+  PowerPerThrottleW: 260
+  PayloadOptionsKg:
+  - 0
+  PayloadTypeName: None (gimbal camera)
+  PayloadHardpoints: 0
+  HasFrontCamera: 1
+  HasBackCamera: 1
+  EngineLoop: {fileID: 8300000, guid: e913d647cc0dfb344bc2dde7820c9433, type: 3}
+  EnginePitchMin: 1.3
+  EnginePitchMax: 2.9
+  EngineVolumeMax: 0.9
+  DefaultBodyColor: {r: 0.22, g: 0.22, b: 0.24, a: 1}
+  DefaultAccentColor: {r: 0.75, g: 0.78, b: 0.82, a: 1}

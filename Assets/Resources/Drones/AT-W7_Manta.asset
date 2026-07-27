@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb0cca2f347f5e04fb52f6195426d2a0, type: 3}
+  m_Name: AT-W7_Manta
+  m_EditorClassIdentifier: 
+  Id: at-w7
+  DisplayName: AT-W7 Manta
+  Manufacturer: AeroTerra Dynamics
+  Class: 6
+  ModelKind: 6
+  Description: "Hand-launched tailless flying-wing mapping drone in the eBee mold:
+    foam blended-wing body, rear pusher prop and a belly survey camera. Featherweight,
+    efficient, belly-lands \u2014 no gear, no ordnance."
+  EmptyMassKg: 1.4
+  WingspanM: 1.2
+  RotorCount: 1
+  AirframeHP: 25
+  MaxSpeedKmh: 110
+  MaxAscentRateMs: 4
+  MaxAltitudeM: 4000
+  MaxThrustN: 24
+  PitchRollTorque: 9
+  YawTorque: 3
+  LinearDrag: 0.45
+  AngularDrag: 3.5
+  BatteryOptionsWh:
+  - 90
+  - 140
+  - 200
+  CruisePowerW: 90
+  PowerPerThrottleW: 240
+  PayloadOptionsKg:
+  - 0
+  PayloadTypeName: None (survey sensors)
+  PayloadHardpoints: 0
+  HasFrontCamera: 1
+  HasBackCamera: 1
+  EngineLoop: {fileID: 8300000, guid: e913d647cc0dfb344bc2dde7820c9433, type: 3}
+  EnginePitchMin: 1
+  EnginePitchMax: 2
+  EngineVolumeMax: 0.9
+  DefaultBodyColor: {r: 0.14, g: 0.14, b: 0.15, a: 1}
+  DefaultAccentColor: {r: 0.95, g: 0.78, b: 0.1, a: 1}

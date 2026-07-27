@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb0cca2f347f5e04fb52f6195426d2a0, type: 3}
+  m_Name: AT-J9_Wraith
+  m_EditorClassIdentifier: 
+  Id: at-j9
+  DisplayName: AT-J9 Wraith
+  Manufacturer: AeroTerra Dynamics
+  Class: 8
+  ModelKind: 8
+  Description: "Fictional jet-powered one-way strike drone: slender swept-wing airframe
+    with a dorsal intake and a seeker nose. The fastest thing AeroTerra flies \u2014
+    the warhead is built into the airframe, so the whole aircraft is the weapon (in-game
+    one-way profile)."
+  EmptyMassKg: 22
+  WingspanM: 2.6
+  RotorCount: 0
+  AirframeHP: 70
+  MaxSpeedKmh: 320
+  MaxAscentRateMs: 14
+  MaxAltitudeM: 8000
+  MaxThrustN: 420
+  PitchRollTorque: 26
+  YawTorque: 10
+  LinearDrag: 0.35
+  AngularDrag: 3.5
+  PowerSystem: 1
+  FuelOptionsL:
+  - 10
+  - 15
+  - 20
+  BatteryOptionsWh:
+  - 1500
+  - 2200
+  - 3000
+  CruisePowerW: 1500
+  PowerPerThrottleW: 2600
+  PayloadOptionsKg:
+  - 8
+  - 12
+  - 16
+  PayloadTypeName: Warhead mass (simulated)
+  PayloadHardpoints: 1
+  HasFrontCamera: 1
+  HasBackCamera: 0
+  EngineLoop: {fileID: 8300000, guid: e913d647cc0dfb344bc2dde7820c9433, type: 3}
+  EnginePitchMin: 1.3
+  EnginePitchMax: 2.8
+  EngineVolumeMax: 0.9
+  DefaultBodyColor: {r: 0.16, g: 0.17, b: 0.19, a: 1}
+  DefaultAccentColor: {r: 0.85, g: 0.25, b: 0.1, a: 1}

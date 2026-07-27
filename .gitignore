@@ -1,0 +1,18 @@
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+*.csproj
+*.sln
+*.apk
+*.aab
+*.unitypackage
+.vs/
+.idea/
+
+# Claude Code — personal/local overrides only; .claude/settings.json and
+# .claude/commands/ are intentionally tracked and shared with the team.
+.claude/settings.local.json

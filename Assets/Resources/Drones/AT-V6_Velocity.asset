@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb0cca2f347f5e04fb52f6195426d2a0, type: 3}
+  m_Name: AT-V6_Velocity
+  m_EditorClassIdentifier: 
+  Id: at-v6
+  DisplayName: AT-V6 Velocity
+  Manufacturer: AeroTerra Dynamics
+  Class: 5
+  ModelKind: 5
+  Description: "Featherweight 5\"-class FPV racing quad: minimal X-frame, sleek aero
+    canopy and screaming high-KV motors. No cargo, no ordnance \u2014 built for one
+    thing: raw speed around the course."
+  EmptyMassKg: 0.55
+  WingspanM: 0.26
+  RotorCount: 4
+  AirframeHP: 15
+  MaxSpeedKmh: 240
+  MaxAscentRateMs: 15
+  MaxAltitudeM: 2000
+  MaxThrustN: 30
+  PitchRollTorque: 10
+  YawTorque: 4
+  LinearDrag: 0.3
+  AngularDrag: 3.5
+  BatteryOptionsWh:
+  - 60
+  - 90
+  - 120
+  CruisePowerW: 300
+  PowerPerThrottleW: 900
+  PayloadOptionsKg:
+  - 0
+  PayloadTypeName: None
+  EngineLoop: {fileID: 8300000, guid: e913d647cc0dfb344bc2dde7820c9433, type: 3}
+  EnginePitchMin: 1.4
+  EnginePitchMax: 3.2
+  EngineVolumeMax: 0.9
+  DefaultBodyColor: {r: 0.85, g: 0.9, b: 0.15, a: 1}
+  DefaultAccentColor: {r: 0.05, g: 0.05, b: 0.08, a: 1}
+  PayloadHardpoints: 0
+  HasFrontCamera: 1
+  HasBackCamera: 0

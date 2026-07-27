@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a7927a44f194675a64c8dbdc3b4d939, type: 3}
+  m_Name: new-york
+  m_EditorClassIdentifier:
+  Id: new-york
+  DisplayName: New York
+  Country: United States
+  Description: Fly through Manhattan past the Empire State Building, Central Park
+    and the Statue of Liberty.
+  Latitude: 40.7460
+  Longitude: -73.8450
+  SpawnAltitudeMeters: 350
+  SpawnHeadingDeg: 0

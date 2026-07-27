@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb0cca2f347f5e04fb52f6195426d2a0, type: 3}
+  m_Name: AT-H12_Griffin
+  m_EditorClassIdentifier:
+  Id: at-h12
+  DisplayName: AT-H12 Griffin
+  Manufacturer: AeroTerra Dynamics
+  Class: 7
+  ModelKind: 11
+  Description: 'VTOL hybrid built around a hand-modeled airframe rather than AeroTerra''s
+    usual procedural mesh: lift rotors for vertical takeoff, then wing-borne cruise
+    once it transitions. The one imported model in the fleet.'
+  EmptyMassKg: 14
+  WingspanM: 2.4
+  RotorCount: 4
+  AirframeHP: 110
+  MaxSpeedKmh: 125
+  MaxAscentRateMs: 6.5
+  MaxAltitudeM: 4200
+  MaxThrustN: 480
+  PitchRollTorque: 15
+  YawTorque: 6
+  LinearDrag: 0.6
+  AngularDrag: 3.5
+  BatteryOptionsWh:
+  - 1100
+  - 1700
+  - 2300
+  CruisePowerW: 450
+  PowerPerThrottleW: 1200
+  PayloadOptionsKg:
+  - 0
+  - 2
+  - 4
+  - 6
+  PayloadTypeName: Cargo pod
+  PayloadHardpoints: 1
+  HasFrontCamera: 1
+  HasBackCamera: 0
+  EngineLoop: {fileID: 8300000, guid: e913d647cc0dfb344bc2dde7820c9433, type: 3}
+  EnginePitchMin: 0.7
+  EnginePitchMax: 1.6
+  EngineVolumeMax: 0.9
+  DefaultBodyColor: {r: 0.85, g: 0.86, b: 0.88, a: 1}
+  DefaultAccentColor: {r: 0.15, g: 0.45, b: 0.75, a: 1}

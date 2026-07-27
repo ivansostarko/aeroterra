@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb0cca2f347f5e04fb52f6195426d2a0, type: 3}
+  m_Name: AT-K2_Vespid
+  m_EditorClassIdentifier: 
+  Id: at-k2
+  DisplayName: AT-K2 Vespid
+  Manufacturer: AeroTerra Dynamics
+  Class: 1
+  Description: Fictional delta-wing loitering strike drone for the simulator. Fast,
+    agile, with a pusher prop and seeker nose. One-way mission profile (in-game).
+  EmptyMassKg: 5.2
+  WingspanM: 1.2
+  RotorCount: 1
+  AirframeHP: 80
+  MaxSpeedKmh: 185
+  MaxAscentRateMs: 9
+  MaxAltitudeM: 4000
+  MaxThrustN: 240
+  PitchRollTorque: 22
+  YawTorque: 9
+  LinearDrag: 0.5
+  AngularDrag: 3.5
+  BatteryOptionsWh:
+  - 400
+  - 600
+  - 800
+  CruisePowerW: 500
+  PowerPerThrottleW: 1100
+  PayloadOptionsKg:
+  - 0
+  - 1
+  - 2
+  - 3
+  PayloadTypeName: Warhead mass (simulated)
+  EngineLoop: {fileID: 0}
+  EnginePitchMin: 1
+  EnginePitchMax: 2.2
+  EngineVolumeMax: 0.9
+  DefaultBodyColor: {r: 0.25, g: 0.28, b: 0.24, a: 1}
+  DefaultAccentColor: {r: 0.75, g: 0.15, b: 0.12, a: 1}
+  PayloadHardpoints: 1
+  HasFrontCamera: 1
+  HasBackCamera: 0

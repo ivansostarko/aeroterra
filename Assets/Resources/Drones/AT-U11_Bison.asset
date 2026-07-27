@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb0cca2f347f5e04fb52f6195426d2a0, type: 3}
+  m_Name: AT-U11_Bison
+  m_EditorClassIdentifier: 
+  Id: at-u11
+  DisplayName: AT-U11 Bison
+  Manufacturer: AeroTerra Dynamics
+  Class: 10
+  ModelKind: 10
+  Description: 'Utility strike UCAV converted from a light-aircraft airframe: strut-braced
+    high wing, fixed tricycle gear, belly equipment pods and two underwing guided
+    munitions (simulated). Slow, tough and steady.'
+  EmptyMassKg: 48
+  WingspanM: 8.8
+  RotorCount: 1
+  AirframeHP: 220
+  MaxSpeedKmh: 190
+  MaxAscentRateMs: 7
+  MaxAltitudeM: 5500
+  MaxThrustN: 950
+  PitchRollTorque: 17
+  YawTorque: 7
+  LinearDrag: 0.5
+  AngularDrag: 3.5
+  PowerSystem: 1
+  FuelOptionsL:
+  - 15
+  - 22
+  - 30
+  BatteryOptionsWh:
+  - 3000
+  - 4500
+  - 6000
+  CruisePowerW: 1300
+  PowerPerThrottleW: 2200
+  PayloadOptionsKg:
+  - 0
+  - 4
+  - 8
+  - 12
+  PayloadTypeName: Warhead mass (simulated)
+  PayloadKind: 1
+  PayloadHardpoints: 2
+  HasFrontCamera: 1
+  HasBackCamera: 1
+  EngineLoop: {fileID: 8300000, guid: e913d647cc0dfb344bc2dde7820c9433, type: 3}
+  EnginePitchMin: 0.6
+  EnginePitchMax: 1.3
+  EngineVolumeMax: 0.9
+  DefaultBodyColor: {r: 0.45, g: 0.5, b: 0.42, a: 1}
+  DefaultAccentColor: {r: 0.2, g: 0.24, b: 0.18, a: 1}

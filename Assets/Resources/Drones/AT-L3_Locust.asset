@@ -1,0 +1,59 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb0cca2f347f5e04fb52f6195426d2a0, type: 3}
+  m_Name: AT-L3_Locust
+  m_EditorClassIdentifier: 
+  Id: at-l3
+  DisplayName: AT-L3 Locust
+  Manufacturer: AeroTerra Dynamics
+  Class: 2
+  ModelKind: 2
+  Description: 'Long-range delta-wing loitering munition inspired by the Shahed-136
+    silhouette: one-piece delta, drooped nose, wingtip plates and a rear pusher prop.
+    Built for endurance, not agility. One-way mission profile (in-game).'
+  EmptyMassKg: 14
+  WingspanM: 2.5
+  RotorCount: 1
+  AirframeHP: 60
+  MaxSpeedKmh: 185
+  MaxAscentRateMs: 7
+  MaxAltitudeM: 4000
+  MaxThrustN: 300
+  PitchRollTorque: 18
+  YawTorque: 7
+  LinearDrag: 0.4
+  AngularDrag: 3.5
+  PowerSystem: 1
+  FuelOptionsL:
+  - 6
+  - 9
+  - 12
+  BatteryOptionsWh:
+  - 900
+  - 1400
+  - 2000
+  CruisePowerW: 320
+  PowerPerThrottleW: 900
+  PayloadOptionsKg:
+  - 5
+  - 10
+  - 15
+  PayloadTypeName: Warhead mass (simulated)
+  EngineLoop: {fileID: 0}
+  EnginePitchMin: 0.8
+  EnginePitchMax: 1.8
+  EngineVolumeMax: 0.9
+  DefaultBodyColor: {r: 0.72, g: 0.68, b: 0.55, a: 1}
+  DefaultAccentColor: {r: 0.5, g: 0.46, b: 0.36, a: 1}
+  PayloadHardpoints: 1
+  HasFrontCamera: 1
+  HasBackCamera: 0

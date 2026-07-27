@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb0cca2f347f5e04fb52f6195426d2a0, type: 3}
+  m_Name: AT-R4_Hornet
+  m_EditorClassIdentifier: 
+  Id: at-r4
+  DisplayName: AT-R4 Hornet
+  Manufacturer: AeroTerra Dynamics
+  Class: 3
+  ModelKind: 3
+  Description: 'Carbon-fiber long-range FPV strike quad in the style of improvised
+    bomber quads: plate frame, oversized 3-blade props, strapped-on battery and a
+    belly release clamp for a drop munition. Tiny, fast and twitchy.'
+  EmptyMassKg: 1.6
+  WingspanM: 0.62
+  RotorCount: 4
+  AirframeHP: 20
+  MaxSpeedKmh: 140
+  MaxAscentRateMs: 12
+  MaxAltitudeM: 3000
+  MaxThrustN: 65
+  PitchRollTorque: 6
+  YawTorque: 2.5
+  LinearDrag: 0.9
+  AngularDrag: 3.5
+  BatteryOptionsWh:
+  - 90
+  - 150
+  - 220
+  CruisePowerW: 160
+  PowerPerThrottleW: 650
+  PayloadOptionsKg:
+  - 0
+  - 0.5
+  - 1
+  - 1.5
+  PayloadTypeName: Drop munition (simulated)
+  PayloadKind: 3
+  EngineLoop: {fileID: 0}
+  EnginePitchMin: 1.2
+  EnginePitchMax: 2.6
+  EngineVolumeMax: 0.9
+  DefaultBodyColor: {r: 0.16, g: 0.16, b: 0.18, a: 1}
+  DefaultAccentColor: {r: 0.15, g: 0.35, b: 0.85, a: 1}
+  PayloadHardpoints: 1
+  HasFrontCamera: 1
+  HasBackCamera: 1

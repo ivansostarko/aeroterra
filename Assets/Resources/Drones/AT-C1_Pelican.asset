@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb0cca2f347f5e04fb52f6195426d2a0, type: 3}
+  m_Name: AT-C1_Pelican
+  m_EditorClassIdentifier: 
+  Id: at-c1
+  DisplayName: AT-C1 Pelican
+  Manufacturer: AeroTerra Dynamics
+  Class: 0
+  Description: Heavy-lift coaxial X8 delivery drone. Slow but incredibly stable,
+    with a detachable cargo pod and long-endurance battery options.
+  EmptyMassKg: 9.5
+  WingspanM: 1.2
+  RotorCount: 8
+  AirframeHP: 150
+  MaxSpeedKmh: 75
+  MaxAscentRateMs: 5
+  MaxAltitudeM: 4000
+  MaxThrustN: 420
+  PitchRollTorque: 16
+  YawTorque: 7
+  LinearDrag: 0.9
+  AngularDrag: 3.5
+  BatteryOptionsWh:
+  - 800
+  - 1200
+  - 1600
+  CruisePowerW: 650
+  PowerPerThrottleW: 1400
+  PayloadOptionsKg:
+  - 0
+  - 3
+  - 6
+  - 10
+  PayloadTypeName: Cargo pod
+  EngineLoop: {fileID: 0}
+  EnginePitchMin: 0.6
+  EnginePitchMax: 1.4
+  EngineVolumeMax: 0.9
+  DefaultBodyColor: {r: 0.85, g: 0.85, b: 0.88, a: 1}
+  DefaultAccentColor: {r: 0.95, g: 0.55, b: 0.1, a: 1}
+  PayloadHardpoints: 1
+  HasFrontCamera: 1
+  HasBackCamera: 0

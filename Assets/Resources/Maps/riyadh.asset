@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a7927a44f194675a64c8dbdc3b4d939, type: 3}
+  m_Name: riyadh
+  m_EditorClassIdentifier:
+  Id: riyadh
+  DisplayName: Riyadh
+  Country: Saudi Arabia
+  Description: Fly over Kingdom Centre Tower, Al Faisaliah and the King Abdullah
+    Financial District.
+  Latitude: 24.8000
+  Longitude: 46.7000
+  SpawnAltitudeMeters: 350
+  SpawnHeadingDeg: 0

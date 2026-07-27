@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/setup-ubuntu.sh)",
+      "Bash(./scripts/build-all.sh:*)",
+      "Bash(./scripts/build-windows.sh:*)",
+      "Bash(./scripts/build-web.sh:*)",
+      "Bash(./scripts/package-project.sh)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "deny": [
+      "Read(./ProjectSettings/CesiumIonServer.asset)",
+      "Read(**/*.env)",
+      "Read(**/CesiumIonServer.asset)"
+    ]
+  },
+  "env": {
+    "PROJECT_TYPE": "unity",
+    "UNITY_VERSION": "2022.3 LTS"
+  }
+}

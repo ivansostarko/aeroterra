@@ -1,0 +1,19 @@
+C:\Users\ivans\Desktop\aeroterra\.claude\commands\add-city.md
+C:\Users\ivans\Desktop\aeroterra\.claude\commands\build-linux.md
+C:\Users\ivans\Desktop\aeroterra\.claude\commands\build-web.md
+C:\Users\ivans\Desktop\aeroterra\.claude\commands\build-windows.md
+C:\Users\ivans\Desktop\aeroterra\Assets\TextMesh Pro\Fonts\LiberationSans - OFL.txt
+C:\Users\ivans\Desktop\aeroterra\Assets\TextMesh Pro\Resources\LineBreaking Following Characters.txt
+C:\Users\ivans\Desktop\aeroterra\Assets\TextMesh Pro\Resources\LineBreaking Leading Characters.txt
+C:\Users\ivans\Desktop\aeroterra\Assets\TextMesh Pro\Sprites\EmojiOne Attribution.txt
+C:\Users\ivans\Desktop\aeroterra\CLAUDE.md
+C:\Users\ivans\Desktop\aeroterra\ProjectSettings\ProjectVersion.txt
+C:\Users\ivans\Desktop\aeroterra\README.md
+C:\Users\ivans\Desktop\aeroterra\docs\01-DEVELOPMENT-SETUP-UBUNTU.md
+C:\Users\ivans\Desktop\aeroterra\docs\02-ARCHITECTURE.md
+C:\Users\ivans\Desktop\aeroterra\docs\03-BUILD-GUIDE.md
+C:\Users\ivans\Desktop\aeroterra\docs\04-CESIUM-SETUP.md
+C:\Users\ivans\Desktop\aeroterra\docs\05-CONTROLS.md
+C:\Users\ivans\Desktop\aeroterra\docs\06-ROADMAP.md
+C:\Users\ivans\Desktop\aeroterra\docs\07-WINDOWS-SETUP.md
+C:\Users\ivans\Desktop\aeroterra\Assets\TextMesh Pro\Sprites\EmojiOne.png
