@@ -49,7 +49,8 @@ namespace AeroTerra.UI
                 new[] { "Images/Backgrounds/main-menu/slider_4" });
             Panel_(_root, "Scrim", new Color(0f, 0f, 0f, 0.55f), Vector2.zero, Vector2.one);
 
-            var title = Label(_root, "CREDITS", 44, new Vector2(0.05f, 0.86f), new Vector2(0.95f, 0.95f),
+            BackButton_(_root, new Vector2(0.02f, 0.90f), new Vector2(0.075f, 0.965f), GoBack);
+            var title = Label(_root, "CREDITS", 44, new Vector2(0.10f, 0.86f), new Vector2(0.95f, 0.95f),
                   TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
             title.characterSpacing = 6;
 
@@ -68,8 +69,6 @@ namespace AeroTerra.UI
             Label(box, "WEBSITE", 12, new Vector2(0.06f, y - 0.045f), new Vector2(0.94f, y),
                   Accent, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
             BuildLink(box, url, new Vector2(0.06f, y - rowH), new Vector2(0.94f, y - 0.05f));
-
-            Button_(_root, "< BACK", new Vector2(0.02f, 0.02f), new Vector2(0.145f, 0.085f), GoBack);
         }
 
         private static void AddRow(Transform box, string caption, string value, ref float y, float rowH)

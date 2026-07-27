@@ -67,7 +67,8 @@ namespace AeroTerra.UI
             Clear();
             _screen = Screen.Hub;
             _root = Panel_(Canvas.transform, "Missions_Hub", Bg, Vector2.zero, Vector2.one);
-            Label(_root, "MISSIONS — SELECT MODE", 44, new Vector2(0.05f, 0.88f), new Vector2(0.95f, 0.97f),
+            BackButton_(_root, new Vector2(0.02f, 0.90f), new Vector2(0.075f, 0.965f), GoBack);
+            Label(_root, "MISSIONS — SELECT MODE", 44, new Vector2(0.10f, 0.88f), new Vector2(0.95f, 0.97f),
                   TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
 
             const float areaX0 = 0.05f, areaX1 = 0.95f, areaY0 = 0.14f, areaY1 = 0.82f;
@@ -79,8 +80,6 @@ namespace AeroTerra.UI
                 float x0 = areaX0 + i * (cellW + gap), x1 = x0 + cellW;
                 BuildCard(Categories[i], x0, x1, areaY0, areaY1);
             }
-
-            Button_(_root, "< BACK", new Vector2(0.03f, 0.03f), new Vector2(0.15f, 0.1f), GoBack);
         }
 
         private void BuildCard(Category cat, float x0, float x1, float y0, float y1)
@@ -133,13 +132,12 @@ namespace AeroTerra.UI
             Clear();
             _screen = Screen.Detail;
             _root = Panel_(Canvas.transform, "Missions_Detail", Bg, Vector2.zero, Vector2.one);
+            BackButton_(_root, new Vector2(0.02f, 0.90f), new Vector2(0.075f, 0.965f), GoBack);
 
             Label(_root, _selected.DisplayName, 44, new Vector2(0.05f, 0.56f), new Vector2(0.95f, 0.66f),
                   TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
             Label(_root, "UNDER DEVELOPMENT", 20, new Vector2(0.05f, 0.46f), new Vector2(0.95f, 0.54f),
                   Accent, TMPro.TextAlignmentOptions.Center);
-
-            Button_(_root, "< BACK", new Vector2(0.03f, 0.03f), new Vector2(0.15f, 0.1f), GoBack);
         }
 
         private void Clear() { if (_root != null) Destroy(_root.gameObject); }

@@ -5,11 +5,13 @@ namespace AeroTerra.Procedural
 {
     /// <summary>
     /// Procedural drone "skins" — runtime-generated pattern textures (camo, stripes,
-    /// split-fade, digital) parametrized by a drone's own fixed DefaultBodyColor/
-    /// DefaultAccentColor, applied as the body material's base texture. Replaces the
-    /// old flat body/accent livery color pickers with a real per-drone customization
-    /// axis. No imported image files — same fully-procedural convention as every other
-    /// visual system in this project (see DroneMeshBuilder, MapIconBuilder).
+    /// split-fade, digital) parametrized by a body/accent color pair, applied as the
+    /// body material's base texture. Body color is either the spec's fixed
+    /// DefaultBodyColor or a custom one from the Workshop's MAIN COLOR picker (see
+    /// CustomDroneData.HasCustomBodyColor); accent color is still always the spec's
+    /// fixed DefaultAccentColor. No imported image files — same fully-procedural
+    /// convention as every other visual system in this project (see DroneMeshBuilder,
+    /// MapIconBuilder).
     /// </summary>
     public static class DroneSkinBuilder
     {

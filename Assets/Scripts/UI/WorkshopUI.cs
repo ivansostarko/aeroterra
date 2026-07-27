@@ -30,6 +30,7 @@ namespace AeroTerra.UI
         private RenderTexture _stageRT;        // stage camera renders here, not to the screen — see SetupStage
         private GameObject _stageRig;          // lights + pedestal, destroyed on close
         private int _tab;                      // 0 = specs, 1 = loadout, 2 = saved
+        private int _specsSubTab;              // 0 = general, 1 = performance, 2 = systems (Specs tab only)
         private RectTransform _hangarContent;   // last hangar ScrollList content — read for its live
                                                  // scroll offset right before each rebuild replaces it
 
@@ -168,6 +169,7 @@ namespace AeroTerra.UI
             if (_framedIndex != _ctrl.CurrentIndex)
             {
                 _framedIndex = _ctrl.CurrentIndex;
+                _specsSubTab = 0;
                 _camDist = Mathf.Clamp(_ctrl.ModelRadius * 2.2f, 1.0f, MaxCamDist);
                 UpdateCamera();
             }
@@ -180,24 +182,23 @@ namespace AeroTerra.UI
             BuildStageOverlays(spec);
             BuildSidePanel(spec);
 
-            // Same bottom-left corner used by every other menu in the game.
-            Button_(_root, "< BACK", new Vector2(0.02f, 0.02f), new Vector2(0.145f, 0.085f), Close);
-
             RefreshLive();
         }
 
         private void BuildHeader(DroneSpecification spec)
         {
             var header = Panel_(_root, "Header", Bg, new Vector2(0f, HeaderY0), Vector2.one);
-            var title = Label(header, "WORKSHOP", 30, new Vector2(0.015f, 0.05f), new Vector2(0.16f, 0.95f),
+            BackButton_(header, new Vector2(0.008f, 0.18f), new Vector2(0.065f, 0.82f), Close);
+
+            var title = Label(header, "WORKSHOP", 30, new Vector2(0.105f, 0.05f), new Vector2(0.25f, 0.95f),
                               TextMain, TMPro.TextAlignmentOptions.MidlineLeft, TMPro.FontStyles.Bold);
             title.characterSpacing = 4;
             Panel_(header, "Divider", new Color(Accent.r, Accent.g, Accent.b, 0.5f),
-                   new Vector2(0.148f, 0.25f), new Vector2(0.1495f, 0.75f));
+                   new Vector2(0.238f, 0.25f), new Vector2(0.2395f, 0.75f));
             Label(header, "UAV SHOWROOM · SPECIFICATIONS · LOADOUT · SKINS", 15,
-                  new Vector2(0.158f, 0.05f), new Vector2(0.62f, 0.95f), TextDim,
+                  new Vector2(0.248f, 0.05f), new Vector2(0.71f, 0.95f), TextDim,
                   TMPro.TextAlignmentOptions.MidlineLeft);
-            _headerCounts = Label(header, "", 14, new Vector2(0.62f, 0.05f), new Vector2(0.985f, 0.95f),
+            _headerCounts = Label(header, "", 14, new Vector2(0.71f, 0.05f), new Vector2(0.985f, 0.95f),
                                   TextDim, TMPro.TextAlignmentOptions.MidlineRight);
         }
 
@@ -360,10 +361,24 @@ namespace AeroTerra.UI
                         _tab == i ? Accent : PanelAlt, 15);
             }
 
+            if (_tab == 1)
+            {
+                // LOADOUT grew a MAIN COLOR section on top of everything it already had
+                // (power cell, payload, skin, additional loadout, save) — more than fits
+                // in one screen's worth of space, so it scrolls. Same ScrollList primitive
+                // as the hangar rail, just taller vertical content instead of a row list.
+                // BuildLoadoutTab itself is completely unaware of this — it just receives
+                // a taller "panel" and its normalized Y coordinates resolve against that.
+                var (viewport, content, _) = ScrollList(panel, "LoadoutScroll",
+                    new Vector2(0f, 0f), new Vector2(1f, 0.935f));
+                content.sizeDelta = new Vector2(0f, viewport.rect.height * 1.5f);
+                BuildLoadoutTab(content, spec);
+                return;
+            }
+
             switch (_tab)
             {
                 case 0: BuildSpecsTab(panel, spec); break;
-                case 1: BuildLoadoutTab(panel, spec); break;
                 default: BuildSavedTab(panel); break;
             }
         }
@@ -384,36 +399,59 @@ namespace AeroTerra.UI
                 ratingY1 -= ratingRowH;
             }
 
-            var rows = new (string label, string value)[]
+            // Detailed stats split into GENERAL / PERFORMANCE / SYSTEMS sub-tabs — the
+            // combined CLASS..CAMERAS table (18 rows) used to be one long list that was
+            // already using nearly the panel's full vertical budget on its own; grouping
+            // it gives each row more breathing room and leaves headroom for future stats.
+            string[] subTabs = { "GENERAL", "PERFORMANCE", "SYSTEMS" };
+            float subTabY1 = ratingY1 - 0.02f, subTabY0 = subTabY1 - 0.045f;
+            float subTabW = (0.94f - 0.06f - (subTabs.Length - 1) * 0.01f) / subTabs.Length;
+            for (int i = 0; i < subTabs.Length; i++)
             {
-                ("CLASS",              spec.ClassLabel()),
-                ("EMPTY MASS",         $"{spec.EmptyMassKg:0.#} kg"),
-                ("WINGSPAN",           $"{spec.WingspanM:0.##} m"),
-                ("ROTORS",             $"{spec.RotorCount}"),
-                ("AIRFRAME INTEGRITY", $"{spec.AirframeHP:0} HP"),
-                ("TOP SPEED",          $"{spec.MaxSpeedKmh:0} km/h"),
-                ("CLIMB RATE",         $"{spec.MaxAscentRateMs:0.#} m/s"),
-                ("SERVICE CEILING",    $"{spec.MaxAltitudeM:0} m"),
-                ("MAX THRUST",         $"{spec.MaxThrustN:0} N"),
-                ("THRUST / WEIGHT",    $"{spec.ThrustToWeightRatio:0.0}×"),
-                ("PITCH/ROLL TORQUE",  $"{spec.PitchRollTorque:0.#} N·m"),
-                ("YAW TORQUE",         $"{spec.YawTorque:0.#} N·m"),
-                ("CRUISE POWER",       $"{spec.CruisePowerW:0} W"),
-                (spec.PowerSystem == PowerSystemType.Fuel ? "FUEL TANK OPTIONS" : "BATTERY OPTIONS",
-                    spec.PowerSystem == PowerSystemType.Fuel
-                        ? $"{string.Join(" / ", spec.FuelOptionsL)} L"
-                        : $"{string.Join(" / ", spec.BatteryOptionsWh)} Wh"),
-                ("PAYLOAD TYPE",       spec.PayloadTypeName),
-                ("PAYLOAD OPTIONS",    $"{string.Join(" / ", spec.PayloadOptionsKg)} kg"),
-                ("HARDPOINTS",         $"{spec.PayloadHardpoints}"),
-                ("CAMERAS",            $"{spec.MaxCameras} ({spec.CameraLoadoutSummary()})"),
+                int idx = i;
+                float sx0 = 0.06f + i * (subTabW + 0.01f);
+                Button_(panel, subTabs[i], new Vector2(sx0, subTabY0), new Vector2(sx0 + subTabW, subTabY1),
+                        () => { if (_specsSubTab != idx) { _specsSubTab = idx; Build(); } },
+                        _specsSubTab == i ? Accent : PanelAlt, 13);
+            }
+
+            (string label, string value)[] rows = _specsSubTab switch
+            {
+                1 => new (string, string)[]
+                {
+                    ("TOP SPEED",          $"{spec.MaxSpeedKmh:0} km/h"),
+                    ("CLIMB RATE",         $"{spec.MaxAscentRateMs:0.#} m/s"),
+                    ("SERVICE CEILING",    $"{spec.MaxAltitudeM:0} m"),
+                    ("MAX THRUST",         $"{spec.MaxThrustN:0} N"),
+                    ("THRUST / WEIGHT",    $"{spec.ThrustToWeightRatio:0.0}×"),
+                    ("PITCH/ROLL TORQUE",  $"{spec.PitchRollTorque:0.#} N·m"),
+                    ("YAW TORQUE",         $"{spec.YawTorque:0.#} N·m"),
+                    ("CRUISE POWER",       $"{spec.CruisePowerW:0} W"),
+                },
+                2 => new (string, string)[]
+                {
+                    (spec.PowerSystem == PowerSystemType.Fuel ? "FUEL TANK OPTIONS" : "BATTERY OPTIONS",
+                        spec.PowerSystem == PowerSystemType.Fuel
+                            ? $"{string.Join(" / ", spec.FuelOptionsL)} L"
+                            : $"{string.Join(" / ", spec.BatteryOptionsWh)} Wh"),
+                    ("PAYLOAD TYPE",       spec.PayloadTypeName),
+                    ("PAYLOAD OPTIONS",    $"{string.Join(" / ", spec.PayloadOptionsKg)} kg"),
+                    ("HARDPOINTS",         $"{spec.PayloadHardpoints}"),
+                    ("CAMERAS",            $"{spec.MaxCameras} ({spec.CameraLoadoutSummary()})"),
+                },
+                _ => new (string, string)[]
+                {
+                    ("CLASS",              spec.ClassLabel()),
+                    ("EMPTY MASS",         $"{spec.EmptyMassKg:0.#} kg"),
+                    ("WINGSPAN",           $"{spec.WingspanM:0.##} m"),
+                    ("ROTORS",             $"{spec.RotorCount}"),
+                    ("AIRFRAME INTEGRITY", $"{spec.AirframeHP:0} HP"),
+                },
             };
 
-            // Slightly tighter than the rating rows above (0.034) — two extra rows
-            // (HARDPOINTS/CAMERAS) were added to this table and it was already using
-            // nearly its full vertical budget down to the panel's bottom edge.
-            const float rowH = 0.032f;
-            float tableTop = ratingY1 - 0.015f;
+            // Rows now get more room per tab (max 8, vs. all 18 crammed together before).
+            const float rowH = 0.045f;
+            float tableTop = subTabY0 - 0.02f;
             for (int i = 0; i < rows.Length; i++)
             {
                 float ry1 = tableTop - i * rowH, ry0 = ry1 - rowH;
@@ -427,44 +465,98 @@ namespace AeroTerra.UI
             }
         }
 
-        // Power cell (battery or fuel), payload, skin, additional loadout, save.
+        // Main color, power cell, payload, skin, additional loadout, save. Scrollable
+        // (see BuildSidePanel) — content is 1.5x the viewport's height, so every Y
+        // coordinate below is 2/3 of what it'd be in a non-scrolling one-screen panel,
+        // freeing 0.59..1.0 for MAIN COLOR while keeping every other section's relative
+        // spacing (and physical on-screen size) exactly as before.
         private void BuildLoadoutTab(Transform panel, DroneSpecification spec)
         {
             bool fuelPowered = spec.PowerSystem == PowerSystemType.Fuel;
 
-            SectionHeader(panel, fuelPowered ? "FUEL TANK" : "POWER CELL", 0.885f);
-            _powerLine = Label(panel, "", 12, new Vector2(0.06f, 0.700f), new Vector2(0.94f, 0.733f), TextDim);
+            SectionHeader(panel, "MAIN COLOR", 0.925f);
+            BuildBodyColorSwatches(panel, 0.700f, 0.880f);
+
+            SectionHeader(panel, fuelPowered ? "FUEL TANK" : "POWER CELL", 0.590f);
+            _powerLine = Label(panel, "", 12, new Vector2(0.06f, 0.467f), new Vector2(0.94f, 0.489f), TextDim);
             if (fuelPowered)
-                BuildFuelCards(panel, spec, 0.740f, 0.825f);
+                BuildFuelCards(panel, spec, 0.493f, 0.550f);
             else
-                BuildBatteryCards(panel, spec, 0.740f, 0.825f);
+                BuildBatteryCards(panel, spec, 0.493f, 0.550f);
             RefreshPowerLine(spec);
 
-            SectionHeader(panel, $"PAYLOAD — {spec.PayloadTypeName.ToUpper()}", 0.655f);
-            BuildPayloadRow(panel, spec, 0.565f, 0.615f);
-            _massLine = Label(panel, "", 13, new Vector2(0.06f, 0.525f), new Vector2(0.94f, 0.563f), TextDim);
+            SectionHeader(panel, $"PAYLOAD — {spec.PayloadTypeName.ToUpper()}", 0.437f);
+            BuildPayloadRow(panel, spec, 0.377f, 0.410f);
+            _massLine = Label(panel, "", 13, new Vector2(0.06f, 0.350f), new Vector2(0.94f, 0.375f), TextDim);
 
             // Only offered when the current airframe has a payload model to show.
             if (_ctrl.HasPayloadVisual)
-                Toggle_(panel, "Display payload on model", new Vector2(0.06f, 0.478f), new Vector2(0.94f, 0.518f),
+                Toggle_(panel, "Display payload on model", new Vector2(0.06f, 0.319f), new Vector2(0.94f, 0.345f),
                         _ctrl.ShowPayload, v => _ctrl.SetShowPayload(v), 13);
 
-            SectionHeader(panel, "SKIN", 0.440f);
-            BuildSkinCards(panel, spec, 0.335f, 0.410f);
+            SectionHeader(panel, "SKIN", 0.293f);
+            BuildSkinCards(panel, spec, 0.223f, 0.273f);
 
-            SectionHeader(panel, "ADDITIONAL LOADOUT", 0.300f);
-            Toggle_(panel, "Smoke screen", new Vector2(0.06f, 0.240f), new Vector2(0.48f, 0.280f),
+            SectionHeader(panel, "ADDITIONAL LOADOUT", 0.200f);
+            Toggle_(panel, "Smoke screen", new Vector2(0.06f, 0.160f), new Vector2(0.48f, 0.187f),
                     _ctrl.Working.SmokeScreenEquipped, v => { _ctrl.SetSmokeScreen(v); RefreshLive(); }, 13);
-            Label(panel, $"+{LoadoutExtras.SmokeScreenKg:0.##} kg", 12, new Vector2(0.50f, 0.240f), new Vector2(0.68f, 0.280f), TextDim);
-            Label(panel, "COMMS", 12, new Vector2(0.06f, 0.205f), new Vector2(0.40f, 0.235f), Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
-            BuildCommsCards(panel, 0.115f, 0.195f);
+            Label(panel, $"+{LoadoutExtras.SmokeScreenKg:0.##} kg", 12, new Vector2(0.50f, 0.160f), new Vector2(0.68f, 0.187f), TextDim);
+            Label(panel, "COMMS", 12, new Vector2(0.06f, 0.137f), new Vector2(0.40f, 0.157f), Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
+            BuildCommsCards(panel, 0.077f, 0.130f);
 
-            _nameField = Input_(panel, "Configuration name…", new Vector2(0.06f, 0.058f), new Vector2(0.94f, 0.100f));
-            Button_(panel, "SAVE CONFIGURATION", new Vector2(0.06f, 0.0f), new Vector2(0.94f, 0.05f),
+            _nameField = Input_(panel, "Configuration name…", new Vector2(0.06f, 0.039f), new Vector2(0.94f, 0.067f));
+            Button_(panel, "SAVE CONFIGURATION", new Vector2(0.06f, 0.0f), new Vector2(0.94f, 0.033f),
                     SaveConfig, Accent, 16);
-            _saveFeedback = Label(panel, "", 11, new Vector2(0.06f, 0.100f), new Vector2(0.94f, 0.115f),
+            _saveFeedback = Label(panel, "", 11, new Vector2(0.06f, 0.067f), new Vector2(0.94f, 0.077f),
                                   Accent, TMPro.TextAlignmentOptions.Right);
         }
+
+        private static readonly (string name, Color color)[] BodyColorPalette =
+        {
+            ("Gunmetal",      new Color(0.42f, 0.44f, 0.47f)),
+            ("Matte Black",   new Color(0.08f, 0.08f, 0.09f)),
+            ("Arctic White",  new Color(0.90f, 0.91f, 0.93f)),
+            ("Desert Tan",    new Color(0.76f, 0.68f, 0.50f)),
+            ("Forest Green",  new Color(0.16f, 0.28f, 0.14f)),
+            ("Navy Blue",     new Color(0.10f, 0.18f, 0.32f)),
+            ("Crimson",       new Color(0.55f, 0.08f, 0.08f)),
+            ("Safety Orange", new Color(0.85f, 0.38f, 0.05f)),
+        };
+
+        /// <summary>MAIN COLOR picker: choosing a swatch sets the body color the skin
+        /// pattern (SKIN section below) is painted over — pick the color here first,
+        /// then the pattern, matching how a real livery is designed.</summary>
+        private void BuildBodyColorSwatches(Transform panel, float y0, float y1)
+        {
+            var palette = BodyColorPalette;
+            Color current = _ctrl.CurrentBodyColor;
+            const float gap = 0.01f;
+            float cellW = (0.94f - 0.06f - (palette.Length - 1) * gap) / palette.Length;
+            for (int i = 0; i < palette.Length; i++)
+            {
+                var (name, color) = palette[i];
+                bool selected = ColorsApprox(current, color);
+                float x0 = 0.06f + i * (cellW + gap), x1 = x0 + cellW;
+
+                var card = Panel_(panel, "Color_" + name, PanelAlt, new Vector2(x0, y0), new Vector2(x1, y1));
+                Panel_(card, "Stripe", selected ? Accent : new Color(1, 1, 1, 0.08f), Vector2.zero, new Vector2(1f, 0.08f));
+                Panel_(card, "Swatch", color, new Vector2(0.12f, 0.32f), new Vector2(0.88f, 0.94f));
+                Label(card, name, 10, new Vector2(0.04f, 0.08f), new Vector2(0.96f, 0.30f),
+                      selected ? TextMain : TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+
+                var btn = card.gameObject.AddComponent<Button>();
+                btn.targetGraphic = card.GetComponent<Image>();
+                var colors = btn.colors; colors.highlightedColor = new Color(1.15f, 1.15f, 1.15f, 1f); colors.pressedColor = Accent;
+                btn.colors = colors;
+                btn.onClick.AddListener(() =>
+                    { Core.AudioManager.Instance?.PlayButtonClick(); _ctrl.SetBodyColor(color); RefreshLive(); Build(); });
+                var trigger = card.gameObject.AddComponent<EventTrigger>();
+                AddTrigger(trigger, EventTriggerType.PointerEnter, _ => Core.AudioManager.Instance?.PlayButtonHover());
+            }
+        }
+
+        private static bool ColorsApprox(Color a, Color b) =>
+            Mathf.Abs(a.r - b.r) < 0.01f && Mathf.Abs(a.g - b.g) < 0.01f && Mathf.Abs(a.b - b.b) < 0.01f;
 
         /// <summary>Total mass across every loadout choice — airframe + power source +
         /// payload + smoke screen + comms — the exact same figure DroneFlightController.
@@ -641,7 +733,7 @@ namespace AeroTerra.UI
 
                 var swatchGo = new GameObject("Swatch", typeof(RawImage));
                 swatchGo.transform.SetParent(card, false);
-                var tex = Procedural.DroneSkinBuilder.GetTexture(id, spec.DefaultBodyColor, spec.DefaultAccentColor);
+                var tex = Procedural.DroneSkinBuilder.GetTexture(id, _ctrl.CurrentBodyColor, spec.DefaultAccentColor);
                 swatchGo.GetComponent<RawImage>().texture = tex;
                 var swatchRt = swatchGo.GetComponent<RectTransform>();
                 swatchRt.anchorMin = new Vector2(0.14f, 0.32f); swatchRt.anchorMax = new Vector2(0.86f, 0.9f);

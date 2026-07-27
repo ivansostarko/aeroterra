@@ -30,6 +30,13 @@ namespace AeroTerra.Workshop
         public DroneSpecification CurrentSpec => BaseDrones[_index];
         public int CurrentIndex => _index;
 
+        /// <summary>Body/main color as currently shown on the stage — the picked custom
+        /// color if the MAIN COLOR picker has been used, else the spec's own default
+        /// (so the UI can show which color is "active" before the user touches anything).</summary>
+        public Color CurrentBodyColor => Working.HasCustomBodyColor
+            ? new Color(Working.BodyR, Working.BodyG, Working.BodyB)
+            : CurrentSpec.DefaultBodyColor;
+
         /// <summary>Whether the payload model (cargo pod / munitions) is shown on the stage.</summary>
         public bool ShowPayload { get; private set; } = true;
 
@@ -160,6 +167,17 @@ namespace AeroTerra.Workshop
         public void SetSkin(string skinId)
         {
             Working.SkinId = skinId;
+            Rebuild();
+        }
+
+        /// <summary>MAIN COLOR picker: sets the body color the skin pattern is painted
+        /// over, replacing the spec's own default for this build only. Needs a full
+        /// Rebuild() for the same reason SetSkin does — the pattern texture is generated
+        /// fresh per (skin, body, accent) combination.</summary>
+        public void SetBodyColor(Color c)
+        {
+            Working.HasCustomBodyColor = true;
+            Working.BodyR = c.r; Working.BodyG = c.g; Working.BodyB = c.b;
             Rebuild();
         }
 

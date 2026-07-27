@@ -15,9 +15,13 @@ namespace AeroTerra.Procedural
                                        Vector3 position, bool flyable,
                                        out Material bodyMat, out Material accentMat)
         {
-            // Livery color is fixed per airframe now (no more body/accent pickers) —
-            // only the skin PATTERN painted over it is a customization choice.
-            Color body = spec.DefaultBodyColor;
+            // Accent color is still fixed per airframe. Body color is too, UNLESS the
+            // Workshop's MAIN COLOR picker set one (custom != null is the Workshop/a
+            // saved custom build; stock Free Flight spawns pass null and always get the
+            // spec's own color).
+            Color body = (custom != null && custom.HasCustomBodyColor)
+                ? new Color(custom.BodyR, custom.BodyG, custom.BodyB)
+                : spec.DefaultBodyColor;
             Color accent = spec.DefaultAccentColor;
             string skinId = custom != null && !string.IsNullOrEmpty(custom.SkinId) ? custom.SkinId : "stock";
 

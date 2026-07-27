@@ -76,7 +76,8 @@ namespace AeroTerra.UI
                 new[] { "Images/Backgrounds/main-menu/slider_1" });
             Panel_(_root, "Scrim", new Color(0f, 0f, 0f, 0.55f), Vector2.zero, Vector2.one);
 
-            Label(_root, "SETTINGS", 40, new Vector2(0.03f, 0.90f), new Vector2(0.55f, 0.98f),
+            BackButton_(_root, new Vector2(0.02f, 0.90f), new Vector2(0.075f, 0.965f), GoBack);
+            Label(_root, "SETTINGS", 40, new Vector2(0.09f, 0.90f), new Vector2(0.55f, 0.98f),
                   TextMain, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
 
             Button_(_root, "SAVE", new Vector2(0.82f, 0.905f), new Vector2(0.97f, 0.975f), () =>
@@ -112,8 +113,6 @@ namespace AeroTerra.UI
                 case TabControls: BuildControls(); break;
                 case TabKeyBindings: BuildKeyBindings(); break;
             }
-
-            Button_(_root, "< BACK", new Vector2(0.03f, 0.03f), new Vector2(0.15f, 0.1f), GoBack);
         }
 
         /// <summary>Re-applies every settings category at once — what the SAVE button guarantees.</summary>

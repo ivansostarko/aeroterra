@@ -8,11 +8,15 @@ see the instruction in `CLAUDE.md`'s Conventions section.
 
 | Font | Role | Source | Used by |
 |---|---|---|---|
-| **Liberation Sans SDF** | Every piece of UI text in the game (menus, HUD, Workshop, Free Flight, Credits, Missions, Settings — everything) | TextMeshPro Essentials import, `Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset`, generated from `Assets/TextMesh Pro/Fonts/LiberationSans.ttf` | `TMP_Settings.asset`'s `m_defaultFontAsset` — every `TextMeshProUGUI` falls through to this because no custom font is set (see below) |
+| **Liberation Sans** (as `AeroTerraFont`) | Every piece of UI text in the game (menus, HUD, Workshop, Free Flight, Credits, Missions, Settings — everything) | `Assets/Resources/Fonts/AeroTerraFont.asset` — a byte-for-byte duplicate of TMP's own `LiberationSans SDF.asset` (same atlas/material, self-contained in one file), re-saved under the project's own explicit font hook path | `UIBuilder.CustomFont()` → every `TextMeshProUGUI`, via `UIBuilder.Label()` |
 
-There is currently **no custom typeface** in the project — the game renders in
-TextMeshPro's stock default font, confirmed live at runtime (`Player.log` names
-`LiberationSans SDF` directly in its missing-glyph warnings).
+The game explicitly ships Liberation Sans as `AeroTerraFont` now, rather than relying
+on it only by accident of being TMP's stock default. Functionally this renders
+identically to before (same underlying font/atlas) — the difference is that the
+project no longer depends on `TMP_Settings.defaultFontAsset` staying `LiberationSans
+SDF`; if that default ever changes (e.g. a different TMP Essentials version), the game
+keeps using Liberation Sans regardless, since `AeroTerraFont.asset` is now a normal
+tracked project asset.
 
 ## How font selection actually works
 
@@ -27,16 +31,17 @@ which calls this once and applies the result if non-null. This is the single,
 project-wide font hook — there are no per-screen or per-component overrides anywhere
 in `Assets/Scripts`.
 
-- **If `Assets/Resources/Fonts/AeroTerraFont.asset` exists** → every label in the game
-  uses it.
-- **If it doesn't** (the case today) → `t.font` is never assigned, so each
-  `TextMeshProUGUI` falls back to whatever `TMP_Settings.defaultFontAsset` is, which is
-  `LiberationSans SDF` out of the box.
+- **`Assets/Resources/Fonts/AeroTerraFont.asset` exists** (as of now) → every label in
+  the game uses it explicitly.
+- **If it's ever deleted** → `t.font` is never assigned, so each `TextMeshProUGUI`
+  falls back to whatever `TMP_Settings.defaultFontAsset` is (`LiberationSans SDF` out
+  of the box) — same fallback behavior as before this file existed.
 
 To change the game's typeface: import a `.ttf`/`.otf`, generate a Font Asset via the
 Editor (**Window ▸ TextMeshPro ▸ Font Asset Creator** — cannot be done headlessly),
-and save it at exactly `Assets/Resources/Fonts/AeroTerraFont.asset`. No code changes
-needed. **Update the table above** when you do this.
+and save it OVER `Assets/Resources/Fonts/AeroTerraFont.asset` (replacing the current
+Liberation Sans one). No code changes needed. **Update the table above** when you do
+this.
 
 ## Other font-adjacent files present but not wired to anything
 
@@ -49,6 +54,11 @@ not referenced by any of our own code beyond the default asset above:
   material variants, unused.
 - `EmojiOne.asset` (+ `EmojiOne.png`/`.json`) — TMP's sprite asset, set as
   `TMP_Settings.defaultSpriteAsset`; no script references sprite tags anywhere.
+
+`Assets/Resources/Fonts/AeroTerraFont.asset` carries its own copy of the Liberation
+Sans SDF atlas texture and material (duplicated, not shared with the file above) —
+harmless (~2 MB), but worth knowing if a build-size audit ever turns up two near-
+identical Liberation Sans atlases.
 
 No `.ttf`/`.otf`/`TMP_FontAsset` files exist under `Assets/Vefects/` (Free Fire VFX
 URP pack) or `Assets/CesiumSettings/` — third-party packages aren't contributing any

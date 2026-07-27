@@ -3,9 +3,12 @@ using UnityEngine;
 namespace AeroTerra.UI
 {
     /// <summary>
-    /// Procedural reticle-style cursor used across the menu screens (Home, Free Flight,
-    /// Workshop, Settings) and the in-flight pause menu. Reset() restores the OS default
-    /// arrow for active flight, where there's nothing to point at with a mouse cursor.
+    /// Cursor used across the menu screens (Home, Free Flight, Workshop, Settings) and
+    /// the in-flight pause menu. Loads Resources/Images/ui/menu_pointer if present, else
+    /// falls back to a procedurally drawn reticle (the previous default, still fully
+    /// working with zero imported assets) — same "never assume Resources.Load succeeds"
+    /// pattern as UIBuilder.CustomFont(). Reset() restores the OS default arrow for
+    /// active flight, where there's nothing to point at with a mouse cursor.
     /// </summary>
     public static class CustomCursor
     {
@@ -13,7 +16,7 @@ namespace AeroTerra.UI
 
         public static void Apply()
         {
-            if (_texture == null) _texture = Build();
+            if (_texture == null) _texture = Resources.Load<Texture2D>("Images/ui/menu_pointer") ?? Build();
             Cursor.SetCursor(_texture, new Vector2(_texture.width / 2f, _texture.height / 2f), CursorMode.Auto);
         }
 

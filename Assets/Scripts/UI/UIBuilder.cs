@@ -236,6 +236,53 @@ namespace AeroTerra.UI
             trigger.triggers.Add(entry);
         }
 
+        private static Texture2D _backIconWhite;
+        private static bool _backIconWhiteChecked;
+
+        /// <summary>
+        /// Icon-only back/close button — every screen's back navigation goes through
+        /// this one helper so the icon only needs to be swapped/restyled in one place.
+        /// Uses the white icon everywhere since every screen in the game is dark-themed
+        /// (Bg/Panel/PanelAlt are all near-black) — back_icon_dark.svg has no current
+        /// use but is kept in Resources for a future light-background screen. Falls back
+        /// to the old "&lt; BACK" text button if the icon hasn't been imported yet (e.g.
+        /// still an unconverted .svg — Unity has no built-in SVG importer), so navigation
+        /// never silently breaks.
+        /// </summary>
+        public static void BackButton_(Transform parent, Vector2 anchorMin, Vector2 anchorMax, System.Action onClick)
+        {
+            if (!_backIconWhiteChecked)
+            {
+                _backIconWhiteChecked = true;
+                _backIconWhite = Resources.Load<Texture2D>("Images/ui/back_icon_white");
+            }
+            if (_backIconWhite == null)
+            {
+                Button_(parent, "< BACK", anchorMin, anchorMax, onClick);
+                return;
+            }
+
+            var go = new GameObject("BackButton", typeof(RawImage));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var img = go.GetComponent<RawImage>();
+            img.texture = _backIconWhite;
+
+            var btn = go.AddComponent<Button>();
+            btn.targetGraphic = img;
+            var colors = btn.colors;
+            colors.highlightedColor = new Color(1.2f, 1.2f, 1.2f, 1f);
+            colors.pressedColor = new Color(0.65f, 0.65f, 0.65f, 1f);
+            btn.colors = colors;
+            btn.onClick.AddListener(() => onClick?.Invoke());
+            btn.onClick.AddListener(() => AudioManager.Instance?.PlayButtonClick());
+
+            var trigger = go.AddComponent<EventTrigger>();
+            AddTrigger(trigger, EventTriggerType.PointerEnter, () => AudioManager.Instance?.PlayButtonHover());
+        }
+
         /// <summary>
         /// Lightweight code-built dropdown: a closed button showing the current value
         /// that, on click, reveals a popup list of `options` rows (in the caller-given

@@ -125,7 +125,8 @@ namespace AeroTerra.UI
             Clear();
             _screen = Screen.Map;
             _root = Panel_(Canvas.transform, "FreeFlight_Maps", Bg, Vector2.zero, Vector2.one);
-            Label(_root, "FREE FLIGHT — SELECT AREA", 44, new Vector2(0.05f, 0.88f), new Vector2(0.95f, 0.97f),
+            BackButton_(_root, new Vector2(0.02f, 0.90f), new Vector2(0.075f, 0.965f), GoBack);
+            Label(_root, "FREE FLIGHT — SELECT AREA", 44, new Vector2(0.10f, 0.88f), new Vector2(0.95f, 0.97f),
                   TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
 
             // Wrapping grid so the card count isn't hardcoded to 2 — MapDefinition.All can grow freely.
@@ -194,8 +195,6 @@ namespace AeroTerra.UI
                 hoverEntry.callback.AddListener(_ => AudioManager.Instance?.PlayButtonHover());
                 cardTrigger.triggers.Add(hoverEntry);
             }
-
-            Button_(_root, "< BACK", new Vector2(0.03f, 0.03f), new Vector2(0.15f, 0.1f), GoBack);
         }
 
         // ---------- Screen 2: 3D drone gallery ----------
@@ -235,15 +234,15 @@ namespace AeroTerra.UI
             // (matches WorkshopUI's identical Color.clear root, for the same reason:
             // an opaque root would blanket the 3D stage's camera output entirely).
             _root = Panel_(Canvas.transform, "FreeFlight_Drones", Color.clear, Vector2.zero, Vector2.one);
+            BackButton_(_root, new Vector2(0.02f, 0.90f), new Vector2(0.075f, 0.965f), GoBack);
             Label(_root, $"SELECT DRONE — {_pickedMap.DisplayName.ToUpper()}", 34,
-                  new Vector2(0.05f, 0.90f), new Vector2(0.95f, 0.98f), TextMain,
+                  new Vector2(0.10f, 0.90f), new Vector2(0.95f, 0.98f), TextMain,
                   TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
 
             if (_rows.Count == 0)
             {
                 Label(_root, "No drones registered.", 22, new Vector2(0.1f, 0.4f), new Vector2(0.9f, 0.6f),
                       TextDim, TMPro.TextAlignmentOptions.Center);
-                Button_(_root, "< BACK", new Vector2(0.03f, 0.03f), new Vector2(0.15f, 0.1f), GoBack);
                 return;
             }
 
@@ -257,8 +256,6 @@ namespace AeroTerra.UI
 
             BuildDroneSidebar();
             BuildDetailsPanel(spec, custom);
-
-            Button_(_root, "< BACK", new Vector2(0.03f, 0.03f), new Vector2(0.15f, 0.1f), GoBack);
         }
 
         /// <summary>Left-edge vertical sidebar: a TYPE filter dropdown up top, then two
@@ -443,10 +440,11 @@ namespace AeroTerra.UI
             Clear();
             _screen = Screen.Conditions;
             _root = Panel_(Canvas.transform, "FreeFlight_Conditions", Bg, Vector2.zero, Vector2.one);
+            BackButton_(_root, new Vector2(0.02f, 0.90f), new Vector2(0.075f, 0.965f), GoBack);
 
             string droneName = _pickedCustom != null ? _pickedCustom.CustomName : _pickedSpec.DisplayName;
             Label(_root, $"FLYING CONDITIONS — {_pickedMap.DisplayName.ToUpper()} · {droneName.ToUpper()}", 32,
-                  new Vector2(0.05f, 0.90f), new Vector2(0.95f, 0.98f), TextMain,
+                  new Vector2(0.10f, 0.90f), new Vector2(0.95f, 0.98f), TextMain,
                   TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
 
             var s = GameManager.Instance.Settings;
@@ -524,8 +522,6 @@ namespace AeroTerra.UI
                 GameManager.Instance.SelectedSpawnAltitudeOverride = _spawnAltitudeM;
                 GameManager.Instance.StartFreeFlight(_pickedMap, _pickedSpec, _pickedCustom);
             }, Accent, 30);
-
-            Button_(_root, "< BACK", new Vector2(0.03f, 0.03f), new Vector2(0.15f, 0.1f), GoBack);
         }
 
         private void RefreshAltitudeLabel()
