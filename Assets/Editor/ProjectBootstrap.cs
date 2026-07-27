@@ -111,6 +111,8 @@ namespace AeroTerra.EditorTools
             cargo.Id = "at-c1"; cargo.DisplayName = "AT-C1 Pelican";
             cargo.Class = DroneClass.CargoDelivery;
             cargo.ModelKind = DroneModelKind.CargoX8;
+            cargo.Category = DroneCategory.CargoLogistics;
+            cargo.FlightModel = DroneFlightModel.Multirotor;
             cargo.Description = "Heavy-lift coaxial X8 delivery drone. Slow but incredibly stable, " +
                                 "with a detachable cargo pod and long-endurance battery options.";
             cargo.EmptyMassKg = 9.5f; cargo.RotorCount = 8; cargo.AirframeHP = 150f;
@@ -123,7 +125,7 @@ namespace AeroTerra.EditorTools
             cargo.PayloadTypeName = "Cargo pod";
             cargo.PayloadKind = PayloadKind.Cargo;
             cargo.PayloadHardpoints = 1;
-            cargo.HasFrontCamera = true; cargo.HasBackCamera = false;
+            cargo.HasFrontCamera = true; cargo.HasBackCamera = true; cargo.HasThermalCamera = false;
             cargo.DefaultBodyColor = new Color(0.85f, 0.85f, 0.88f);
             cargo.DefaultAccentColor = new Color(0.95f, 0.55f, 0.1f);
             cargo.EnginePitchMin = 0.6f; cargo.EnginePitchMax = 1.4f;   // deep heavy-lift hum
@@ -134,6 +136,8 @@ namespace AeroTerra.EditorTools
             strike.Id = "at-k2"; strike.DisplayName = "AT-K2 Vespid";
             strike.Class = DroneClass.KamikazeStrike;
             strike.ModelKind = DroneModelKind.StrikeDelta;
+            strike.Category = DroneCategory.Military;
+            strike.FlightModel = DroneFlightModel.FixedWing;
             strike.Description = "Fictional delta-wing loitering strike drone for the simulator. Fast, " +
                                  "agile, with a pusher prop and seeker nose. One-way mission profile (in-game).";
             strike.EmptyMassKg = 5.2f; strike.RotorCount = 1; strike.AirframeHP = 80f;
@@ -145,7 +149,7 @@ namespace AeroTerra.EditorTools
             strike.PayloadOptionsKg = new[] { 0f, 1f, 2f, 3f };
             strike.PayloadTypeName = "Warhead mass (simulated)";
             strike.PayloadHardpoints = 1;
-            strike.HasFrontCamera = true; strike.HasBackCamera = false;
+            strike.HasFrontCamera = true; strike.HasBackCamera = true; strike.HasThermalCamera = true;
             strike.DefaultBodyColor = new Color(0.25f, 0.28f, 0.24f);
             strike.DefaultAccentColor = new Color(0.75f, 0.15f, 0.12f);
             strike.EnginePitchMin = 1.0f; strike.EnginePitchMax = 2.2f;  // high angry buzz
@@ -156,6 +160,8 @@ namespace AeroTerra.EditorTools
             loiter.Id = "at-l3"; loiter.DisplayName = "AT-L3 Locust";
             loiter.Class = DroneClass.LoiteringMunition;
             loiter.ModelKind = DroneModelKind.LoiteringDelta;
+            loiter.Category = DroneCategory.Military;
+            loiter.FlightModel = DroneFlightModel.FixedWing;
             loiter.Description = "Long-range delta-wing loitering munition inspired by the Shahed-136 " +
                                  "silhouette: one-piece delta, drooped nose, wingtip plates and a rear " +
                                  "pusher prop. Built for endurance, not agility. One-way mission profile (in-game).";
@@ -171,7 +177,7 @@ namespace AeroTerra.EditorTools
             loiter.PayloadOptionsKg = new[] { 5f, 10f, 15f };
             loiter.PayloadTypeName = "Warhead mass (simulated)";
             loiter.PayloadHardpoints = 1;
-            loiter.HasFrontCamera = true; loiter.HasBackCamera = false;
+            loiter.HasFrontCamera = true; loiter.HasBackCamera = true; loiter.HasThermalCamera = false;
             loiter.DefaultBodyColor = new Color(0.72f, 0.68f, 0.55f);   // desert tan composite
             loiter.DefaultAccentColor = new Color(0.5f, 0.46f, 0.36f);
             loiter.EnginePitchMin = 0.8f; loiter.EnginePitchMax = 1.8f; // droning moped buzz
@@ -182,6 +188,8 @@ namespace AeroTerra.EditorTools
             fpv.Id = "at-r4"; fpv.DisplayName = "AT-R4 Hornet";
             fpv.Class = DroneClass.FpvStrike;
             fpv.ModelKind = DroneModelKind.QuadFpv;
+            fpv.Category = DroneCategory.Military;
+            fpv.FlightModel = DroneFlightModel.Multirotor;
             fpv.Description = "Carbon-fiber long-range FPV strike quad in the style of improvised " +
                               "bomber quads: plate frame, oversized 3-blade props, strapped-on battery " +
                               "and a belly release clamp for a drop munition. Tiny, fast and twitchy.";
@@ -197,7 +205,7 @@ namespace AeroTerra.EditorTools
             fpv.PayloadHardpoints = 1;
             // Only airframe in the roster with a second camera: nose FPV feed plus a
             // belly-facing view (CamMode.Bottom) used to line up the drop.
-            fpv.HasFrontCamera = true; fpv.HasBackCamera = true;
+            fpv.HasFrontCamera = true; fpv.HasBackCamera = true; fpv.HasThermalCamera = true;
             fpv.DefaultBodyColor = new Color(0.16f, 0.16f, 0.18f);      // carbon
             fpv.DefaultAccentColor = new Color(0.15f, 0.35f, 0.85f);    // shrink-wrapped pack
             fpv.EnginePitchMin = 1.2f; fpv.EnginePitchMax = 2.6f;       // high FPV whine
@@ -208,6 +216,8 @@ namespace AeroTerra.EditorTools
             ucav.Id = "at-b5"; ucav.DisplayName = "AT-B5 Kestrel";
             ucav.Class = DroneClass.ReconStrike;
             ucav.ModelKind = DroneModelKind.TwinBoomUcav;
+            ucav.Category = DroneCategory.Military;
+            ucav.FlightModel = DroneFlightModel.FixedWing;
             ucav.Description = "Medium-altitude twin-boom recon/strike UCAV inspired by the Bayraktar " +
                                "TB2 silhouette: humped fuselage, chin EO gimbal, inward-canted tail fins " +
                                "and four underwing guided munitions (simulated).";
@@ -221,7 +231,7 @@ namespace AeroTerra.EditorTools
             ucav.PayloadTypeName = "Guided munitions (simulated)";
             ucav.PayloadKind = PayloadKind.GuidedAmmunition;
             ucav.PayloadHardpoints = 4; // four underwing munition mounts, see TwinBoomUcavBuilder
-            ucav.HasFrontCamera = true; ucav.HasBackCamera = false;
+            ucav.HasFrontCamera = true; ucav.HasBackCamera = true; ucav.HasThermalCamera = true;
             ucav.DefaultBodyColor = new Color(0.78f, 0.79f, 0.81f);     // pale gray
             ucav.DefaultAccentColor = new Color(0.45f, 0.12f, 0.12f);   // dark red trim
             ucav.EnginePitchMin = 0.7f; ucav.EnginePitchMax = 1.5f;     // steady turboprop drone
@@ -232,6 +242,8 @@ namespace AeroTerra.EditorTools
             racer.Id = "at-v6"; racer.DisplayName = "AT-V6 Velocity";
             racer.Class = DroneClass.RacingDrone;
             racer.ModelKind = DroneModelKind.RacingQuad;
+            racer.Category = DroneCategory.Civilian;
+            racer.FlightModel = DroneFlightModel.Multirotor;
             racer.Description = "Featherweight 5\"-class FPV racing quad: minimal X-frame, sleek aero " +
                                 "canopy and screaming high-KV motors. No cargo, no ordnance — built for " +
                                 "one thing: raw speed around the course.";
@@ -244,7 +256,7 @@ namespace AeroTerra.EditorTools
             racer.PayloadOptionsKg = new[] { 0f };
             racer.PayloadTypeName = "None";
             racer.PayloadHardpoints = 0;
-            racer.HasFrontCamera = true; racer.HasBackCamera = false;
+            racer.HasFrontCamera = true; racer.HasBackCamera = false; racer.HasThermalCamera = false;
             racer.DefaultBodyColor = new Color(0.85f, 0.9f, 0.15f);    // neon racing yellow-green
             racer.DefaultAccentColor = new Color(0.05f, 0.05f, 0.08f); // near-black trim
             racer.EnginePitchMin = 1.4f; racer.EnginePitchMax = 3.2f;  // screaming high-KV whine
@@ -255,6 +267,8 @@ namespace AeroTerra.EditorTools
             wing.Id = "at-w7"; wing.DisplayName = "AT-W7 Manta";
             wing.Class = DroneClass.SurveyMapping;
             wing.ModelKind = DroneModelKind.FlyingWing;
+            wing.Category = DroneCategory.Military;
+            wing.FlightModel = DroneFlightModel.FixedWing;
             wing.Description = "Hand-launched tailless flying-wing mapping drone in the eBee mold: " +
                                "foam blended-wing body, rear pusher prop and a belly survey camera. " +
                                "Featherweight, efficient, belly-lands — no gear, no ordnance.";
@@ -268,7 +282,7 @@ namespace AeroTerra.EditorTools
             wing.PayloadTypeName = "None (survey sensors)";
             wing.PayloadHardpoints = 0;
             // Nose FPV feed plus the belly mapping camera (CamMode.Bottom).
-            wing.HasFrontCamera = true; wing.HasBackCamera = true;
+            wing.HasFrontCamera = true; wing.HasBackCamera = true; wing.HasThermalCamera = true;
             wing.DefaultBodyColor = new Color(0.14f, 0.14f, 0.15f);    // dark foam
             wing.DefaultAccentColor = new Color(0.95f, 0.78f, 0.10f);  // high-vis yellow
             wing.EnginePitchMin = 1.0f; wing.EnginePitchMax = 2.0f;    // small pusher hum
@@ -279,6 +293,8 @@ namespace AeroTerra.EditorTools
             vtol.Id = "at-v8"; vtol.DisplayName = "AT-V8 Osprey";
             vtol.Class = DroneClass.VtolCargo;
             vtol.ModelKind = DroneModelKind.QuadPlane;
+            vtol.Category = DroneCategory.CargoLogistics;
+            vtol.FlightModel = DroneFlightModel.FixedWing;
             vtol.Description = "VTOL hybrid quad-plane for middle-mile logistics: four lift rotors on " +
                                "under-wing booms hover it like a multirotor, then the long straight wing " +
                                "carries the weight in cruise while the nose prop pulls. Cargo pod under the belly.";
@@ -292,7 +308,7 @@ namespace AeroTerra.EditorTools
             vtol.PayloadTypeName = "Cargo pod";
             vtol.PayloadKind = PayloadKind.Cargo;
             vtol.PayloadHardpoints = 1;
-            vtol.HasFrontCamera = true; vtol.HasBackCamera = false;
+            vtol.HasFrontCamera = true; vtol.HasBackCamera = true; vtol.HasThermalCamera = false;
             vtol.DefaultBodyColor = new Color(0.92f, 0.93f, 0.95f);    // fleet white
             vtol.DefaultAccentColor = new Color(0.15f, 0.45f, 0.75f);  // logistics blue
             vtol.EnginePitchMin = 0.7f; vtol.EnginePitchMax = 1.6f;    // multi-motor drone
@@ -303,6 +319,8 @@ namespace AeroTerra.EditorTools
             jet.Id = "at-j9"; jet.DisplayName = "AT-J9 Wraith";
             jet.Class = DroneClass.JetStrike;
             jet.ModelKind = DroneModelKind.JetSwept;
+            jet.Category = DroneCategory.Military;
+            jet.FlightModel = DroneFlightModel.Rocket;
             jet.Description = "Fictional jet-powered one-way strike drone: slender swept-wing airframe " +
                               "with a dorsal intake and a seeker nose. The fastest thing AeroTerra flies — " +
                               "the warhead is built into the airframe, so the whole aircraft is the weapon " +
@@ -319,7 +337,7 @@ namespace AeroTerra.EditorTools
             jet.PayloadOptionsKg = new[] { 8f, 12f, 16f };
             jet.PayloadTypeName = "Warhead mass (simulated)";
             jet.PayloadHardpoints = 1;
-            jet.HasFrontCamera = true; jet.HasBackCamera = false;
+            jet.HasFrontCamera = true; jet.HasBackCamera = false; jet.HasThermalCamera = false;
             jet.DefaultBodyColor = new Color(0.16f, 0.17f, 0.19f);     // gunmetal
             jet.DefaultAccentColor = new Color(0.85f, 0.25f, 0.10f);   // warning orange
             jet.EnginePitchMin = 1.3f; jet.EnginePitchMax = 2.8f;      // turbine whine
@@ -330,6 +348,8 @@ namespace AeroTerra.EditorTools
             photo.Id = "at-p10"; photo.DisplayName = "AT-P10 Pixel";
             photo.Class = DroneClass.CameraQuad;
             photo.ModelKind = DroneModelKind.FoldQuad;
+            photo.Category = DroneCategory.Civilian;
+            photo.FlightModel = DroneFlightModel.Multirotor;
             photo.Description = "Pocketable consumer camera quad: folding arms, 2-axis gimbal camera, " +
                                 "belly vision sensors and a very forgiving flight controller. Built for " +
                                 "photos, not payloads.";
@@ -343,7 +363,7 @@ namespace AeroTerra.EditorTools
             photo.PayloadTypeName = "None (gimbal camera)";
             photo.PayloadHardpoints = 0;
             // Nose FPV feed plus the gimbal's straight-down view (CamMode.Bottom).
-            photo.HasFrontCamera = true; photo.HasBackCamera = true;
+            photo.HasFrontCamera = true; photo.HasBackCamera = true; photo.HasThermalCamera = false;
             photo.DefaultBodyColor = new Color(0.22f, 0.22f, 0.24f);   // consumer gray
             photo.DefaultAccentColor = new Color(0.75f, 0.78f, 0.82f); // silver trim
             photo.EnginePitchMin = 1.3f; photo.EnginePitchMax = 2.9f;  // small-prop whine
@@ -354,6 +374,8 @@ namespace AeroTerra.EditorTools
             util.Id = "at-u11"; util.DisplayName = "AT-U11 Bison";
             util.Class = DroneClass.UtilityStrike;
             util.ModelKind = DroneModelKind.LightUcav;
+            util.Category = DroneCategory.Military;
+            util.FlightModel = DroneFlightModel.FixedWing;
             util.Description = "Utility strike UCAV converted from a light-aircraft airframe: strut-braced " +
                                "high wing, fixed tricycle gear, belly equipment pods and two underwing " +
                                "guided munitions (simulated). Slow, tough and steady.";
@@ -370,7 +392,7 @@ namespace AeroTerra.EditorTools
             util.PayloadTypeName = "Warhead mass (simulated)";
             util.PayloadKind = PayloadKind.Warhead;
             util.PayloadHardpoints = 2; // two underwing stores, see LightUcavBuilder
-            util.HasFrontCamera = true; util.HasBackCamera = true;
+            util.HasFrontCamera = true; util.HasBackCamera = true; util.HasThermalCamera = true;
             util.DefaultBodyColor = new Color(0.45f, 0.50f, 0.42f);    // drab olive-gray
             util.DefaultAccentColor = new Color(0.20f, 0.24f, 0.18f);  // dark green trim
             util.EnginePitchMin = 0.6f; util.EnginePitchMax = 1.3f;    // piston drone
@@ -386,6 +408,12 @@ namespace AeroTerra.EditorTools
             griffin.Id = "at-h12"; griffin.DisplayName = "AT-H12 Griffin";
             griffin.Class = DroneClass.VtolCargo;
             griffin.ModelKind = DroneModelKind.ImportedMesh;
+            // Category/FlightModel are Workshop-facing display fields only (see
+            // DroneSpecification) — deliberately labeled to match Griffin's imported
+            // fixed-wing gunship MODEL, same intentional mismatch-with-spec precedent
+            // as the rest of this drone's CLAUDE.md-documented exception.
+            griffin.Category = DroneCategory.Military;
+            griffin.FlightModel = DroneFlightModel.FixedWing;
             griffin.Description = "VTOL hybrid built around a hand-modeled airframe rather than " +
                                   "AeroTerra's usual procedural mesh: lift rotors for vertical takeoff, " +
                                   "then wing-borne cruise once it transitions. The one imported model " +
@@ -400,7 +428,7 @@ namespace AeroTerra.EditorTools
             griffin.PayloadTypeName = "Cargo pod";
             griffin.PayloadKind = PayloadKind.Cargo;
             griffin.PayloadHardpoints = 1;
-            griffin.HasFrontCamera = true; griffin.HasBackCamera = false;
+            griffin.HasFrontCamera = true; griffin.HasBackCamera = true; griffin.HasThermalCamera = true;
             griffin.DefaultBodyColor = new Color(0.85f, 0.86f, 0.88f);    // fleet white/gray
             griffin.DefaultAccentColor = new Color(0.15f, 0.45f, 0.75f);  // logistics blue
             griffin.EnginePitchMin = 0.7f; griffin.EnginePitchMax = 1.6f;

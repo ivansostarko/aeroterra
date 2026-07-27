@@ -17,7 +17,6 @@ namespace AeroTerra.Map
         private ParticleSystem _precip;
         private WeatherPreset _preset;
         private float _lightningTimer;
-        private Vector3 _windBase;
         private float _effectsMultiplier = 1f;
         private float _lastRate, _lastMaxParticles = 6000;
 
@@ -66,10 +65,39 @@ namespace AeroTerra.Map
 
         public static float BaseWindSpeedMs(WeatherPreset preset) => BaseWindForPreset(preset).magnitude;
 
-        /// <summary>Fixed prevailing-wind direction, shared by every weather preset's
-        /// BaseWindForPreset (each just scales along it) and by the Settings ▸ Game tab's
-        /// manual wind override — so a manually-set speed blows the same "world" direction
-        /// weather-driven wind always has, rather than introducing a second, arbitrary axis.</summary>
+        /// <summary>Typical air temperature (°C) for a weather preset — Settings ▸ Flying
+        /// Conditions' TEMPERATURE slider resets to this whenever Weather changes, same
+        /// pattern as wind. Feeds BatterySystem.PerformanceFactor in flight.</summary>
+        public static float BaseTemperatureC(WeatherPreset preset) => preset switch
+        {
+            WeatherPreset.Clear => 24f,
+            WeatherPreset.Cloudy => 18f,
+            WeatherPreset.Rain => 15f,
+            WeatherPreset.Storm => 13f,
+            WeatherPreset.Fog => 10f,
+            WeatherPreset.Snow => -5f,
+            _ => 20f,
+        };
+
+        /// <summary>Typical relative humidity (%) for a weather preset — same
+        /// weather-resets-the-slider pattern as wind/temperature. Not currently consumed
+        /// by flight physics (unlike temperature); a purely descriptive condition today.</summary>
+        public static float BaseHumidityPercent(WeatherPreset preset) => preset switch
+        {
+            WeatherPreset.Clear => 40f,
+            WeatherPreset.Cloudy => 55f,
+            WeatherPreset.Rain => 85f,
+            WeatherPreset.Storm => 90f,
+            WeatherPreset.Fog => 95f,
+            WeatherPreset.Snow => 70f,
+            _ => 50f,
+        };
+
+        /// <summary>Fixed prevailing-wind direction every weather preset's
+        /// BaseWindForPreset scales along, and what Settings ▸ Flying Conditions' WIND
+        /// SPEED slider blows along too — so a manually-tweaked speed still blows the
+        /// same "world" direction weather-driven wind always has, rather than
+        /// introducing a second, arbitrary axis.</summary>
         public static readonly Vector3 WindDirection = new Vector3(9f, 0f, 5f).normalized;
 
         public void Apply(WeatherPreset preset)
@@ -77,7 +105,6 @@ namespace AeroTerra.Map
             _preset = preset;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            _windBase = BaseWindForPreset(preset);
 
             switch (preset)
             {
@@ -107,21 +134,21 @@ namespace AeroTerra.Map
 
         private void Update()
         {
-            // Manual override (Settings ▸ Game): a fixed, steady speed along the same
-            // prevailing WindDirection every weather preset uses — no gust noise, so a
-            // manually-set value reads exactly as set rather than fluctuating. Read live
-            // every frame (same pull pattern DroneFlightController already uses for
-            // InvertPitch) so the Settings UI just needs to save, no explicit apply call.
+            // Wind speed always comes from Settings ▸ Flying Conditions' WIND SPEED
+            // slider (reset to the picked weather's typical value on change, freely
+            // adjustable afterward — see SettingsUI.BuildConditions) plus gust noise on
+            // top, storms gusting harder. Read live every frame (same pull pattern
+            // DroneFlightController already uses for InvertPitch) so the Settings UI
+            // just needs to save, no explicit apply call.
             var settings = GameManager.Instance != null ? GameManager.Instance.Settings : null;
-            if (settings != null && settings.ManualWindEnabled)
+            if (settings != null)
             {
-                CurrentWind = WindDirection * settings.ManualWindSpeedMs;
+                float gust = Mathf.PerlinNoise(Time.time * 0.3f, 0.7f) * (_preset == WeatherPreset.Storm ? 8f : 2f);
+                CurrentWind = WindDirection * settings.WindSpeedMs + new Vector3(gust, 0f, gust * 0.5f);
             }
             else
             {
-                // Gusting wind
-                float gust = Mathf.PerlinNoise(Time.time * 0.3f, 0.7f) * (_preset == WeatherPreset.Storm ? 8f : 2f);
-                CurrentWind = _windBase + new Vector3(gust, 0f, gust * 0.5f);
+                CurrentWind = Vector3.zero;
             }
 
             // Storm lightning

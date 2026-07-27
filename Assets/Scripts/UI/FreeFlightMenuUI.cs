@@ -467,19 +467,25 @@ namespace AeroTerra.UI
                 s.Weather, new Vector2(0f, 0.62f), new Vector2(1f, 0.70f),
                 w =>
                 {
+                    // Same weather-resets-Wind/Temperature/Humidity behavior as Settings
+                    // ▸ Flying Conditions (WindSpeedMs is the only one with a readout on
+                    // this screen, but all three should end up consistent regardless of
+                    // which screen last touched Weather).
                     s.Weather = w;
+                    s.WindSpeedMs = Map.WeatherSystem.BaseWindSpeedMs(w);
+                    s.TemperatureC = Map.WeatherSystem.BaseTemperatureC(w);
+                    s.HumidityPercent = Map.WeatherSystem.BaseHumidityPercent(w);
                     GameManager.Instance.SaveSettings();
                     Map.WeatherSystem.Instance?.Apply(w);
                     RefreshConditionsSummary();
                     SetWindRow(windValueLabel, windFill, s);
                 });
 
-            // Wind is normally derived from the weather preset above (same values
-            // DroneFlightController's physics actually use via WeatherSystem.CurrentWind)
-            // — this is just a readout so the pilot knows what to expect before taking
-            // off. If Settings ▸ Game's manual wind override is on, it reflects that
-            // fixed value instead (see SetWindRow), since that's what flight will
-            // actually feel regardless of the weather picked here.
+            // Read-only readout of Settings ▸ Flying Conditions' WIND SPEED slider (same
+            // value DroneFlightController's physics actually use via
+            // WeatherSystem.CurrentWind) — picking a weather type above resets it to
+            // that preset's typical speed there, but this screen has no slider of its
+            // own to adjust it further, only Settings does.
             Label(content, "WIND", 16, new Vector2(0f, 0.575f), new Vector2(0.4f, 0.615f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
             windValueLabel = Label(content, "", 15, new Vector2(0.4f, 0.575f), new Vector2(1f, 0.615f),
@@ -529,19 +535,17 @@ namespace AeroTerra.UI
             if (_altitudeLabel != null) _altitudeLabel.text = $"{_spawnAltitudeM:0} m";
         }
 
-        /// <summary>Same non-interactive wind readout as Settings ▸ Game (that's the only
-        /// place with the actual manual-override control) — reflects the manual override
-        /// when it's on, otherwise the weather preset (WeatherSystem.BaseWindForPreset).</summary>
+        /// <summary>Same non-interactive wind readout as Settings ▸ Flying Conditions
+        /// (that's the only place with the actual WIND SPEED slider) — just reflects
+        /// SettingsData.WindSpeedMs, whichever screen last set it.</summary>
         private const float MaxWindMeterMs = 10.5f;
-        private const float ManualWindMaxMs = 15f;
+        private const float WindMaxMs = 15f;
 
         private static void SetWindRow(TMPro.TextMeshProUGUI valueLabel, RectTransform fill, SettingsData s)
         {
             if (valueLabel == null || fill == null) return;
-            float speedMs = s.ManualWindEnabled ? s.ManualWindSpeedMs : Map.WeatherSystem.BaseWindSpeedMs(s.Weather);
-            string source = s.ManualWindEnabled ? "MANUAL" : s.Weather.ToString();
-            valueLabel.text = $"{speedMs:0.0} m/s — {source}";
-            fill.anchorMax = new Vector2(Mathf.Clamp01(speedMs / Mathf.Max(MaxWindMeterMs, ManualWindMaxMs)), 1f);
+            valueLabel.text = $"{s.WindSpeedMs:0.0} m/s";
+            fill.anchorMax = new Vector2(Mathf.Clamp01(s.WindSpeedMs / Mathf.Max(MaxWindMeterMs, WindMaxMs)), 1f);
         }
 
         private void RefreshConditionsSummary()

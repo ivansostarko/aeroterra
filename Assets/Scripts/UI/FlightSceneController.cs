@@ -8,7 +8,7 @@ namespace AeroTerra.UI
     /// <summary>
     /// Entry point of the Flight scene: builds the Cesium world (MapManager),
     /// sky & weather, spawns the selected drone at spawn altitude, attaches the
-    /// chase camera, HUD and pause menu.
+    /// chase camera, HUD, pause menu, and instant-replay/screenshot capture.
     /// </summary>
     public class FlightSceneController : MonoBehaviour
     {
@@ -21,6 +21,7 @@ namespace AeroTerra.UI
         private Canvas _canvas;
         private SettingsUI _settingsUI;
         private NarratorController _narrator;
+        private InstantReplayController _replay;
 
         private void Start()
         {
@@ -74,6 +75,9 @@ namespace AeroTerra.UI
 
             _narrator = gameObject.AddComponent<NarratorController>();
             _narrator.Init(_canvas, _flightController);
+
+            _replay = gameObject.AddComponent<InstantReplayController>();
+            _replay.Init(_flightController, camRig, Camera.main, _canvas);
         }
 
         private void Update()

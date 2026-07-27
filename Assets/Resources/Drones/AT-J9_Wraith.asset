@@ -52,6 +52,9 @@ MonoBehaviour:
   PayloadHardpoints: 1
   HasFrontCamera: 1
   HasBackCamera: 0
+  HasThermalCamera: 0
+  Category: 1
+  FlightModel: 3
   EngineLoop: {fileID: 8300000, guid: e913d647cc0dfb344bc2dde7820c9433, type: 3}
   EnginePitchMin: 1.3
   EnginePitchMax: 2.8

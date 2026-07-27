@@ -3,7 +3,10 @@ using System.Collections.Generic;
 
 namespace AeroTerra.Core
 {
-    public enum ControlScheme { Keyboard, KeyboardMouse, Gamepad, Gyroscope }
+    // Explicit values (skipping 1, the old KeyboardMouse) so existing settings.json saves
+    // with Scheme: 2 (Gamepad) or Scheme: 3 (Gyroscope) — JsonUtility serializes enums as
+    // their int, not by name — still deserialize correctly rather than silently shifting.
+    public enum ControlScheme { Keyboard = 0, Gamepad = 2, Gyroscope = 3 }
     public enum MapStyle { Liberty, Terrain, Satellite, OsmStandard, Dark }
     public enum SkyPreset { Day, Dawn, Dusk, Night }
     public enum WeatherPreset { Clear, Cloudy, Rain, Storm, Fog, Snow }
@@ -22,12 +25,32 @@ namespace AeroTerra.Core
     {
         // Game
         public bool ShowHud = true;
+
+        // Game — HUD elements: each independently toggleable, all visible by default.
+        // FlightHUD.ApplyHudElementSettings() reads these; NarratorController.Enqueue()
+        // reads HudShowNarrator (gates both the subtitle text and the voice line audio).
+        public bool HudShowSpeed = true;
+        public bool HudShowAltitude = true;
+        public bool HudShowGps = true;
+        public bool HudShowBattery = true;
+        public bool HudShowNarrator = true;
+        public bool HudShowPayload = true;
+        public bool HudShowCompass = true;
+        public bool HudShowMinimap = true;
+        public bool HudShowWind = true;
+        public bool HudShowThrottle = true;
+        public bool HudShowTemperature = true;
+
+        // Flying Conditions — Wind/Temperature/Humidity are each a free-standing slider
+        // that gets reset to the picked WeatherPreset's typical value (see
+        // WeatherSystem.BaseWindSpeedMs/BaseTemperatureC/BaseHumidityPercent) whenever
+        // Weather changes, but stay independently adjustable afterward — weather type
+        // is a starting point, not a lock.
         public SkyPreset Sky = SkyPreset.Day;
         public WeatherPreset Weather = WeatherPreset.Clear;
-        // Manual wind override — when enabled, WeatherSystem uses this fixed speed
-        // (along its constant WindDirection) instead of the weather preset's own wind.
-        public bool ManualWindEnabled = false;
-        public float ManualWindSpeedMs = 5f;
+        public float WindSpeedMs = 5f;
+        public float TemperatureC = 22f;
+        public float HumidityPercent = 45f;
 
         // Video
         public WindowMode WindowMode = WindowMode.Fullscreen;
@@ -56,9 +79,14 @@ namespace AeroTerra.Core
         public bool Enable3DBuildings = true;
         public bool Enable3DTerrain = true;
         public bool ShowMapPlaceLabels = true;
+        /// <summary>Google Photorealistic 3D Tiles (Cesium ion's hosted asset, ID 2275207)
+        /// — replaces (not layers with) World Terrain/OSM Buildings/raster imagery when on,
+        /// since Google's tileset already bakes in terrain+buildings+imagery. Default off:
+        /// it's a heavier stream than the classic terrain+buildings combo.</summary>
+        public bool Enable3DTiles = false;
 
         // Controls
-        public ControlScheme Scheme = ControlScheme.KeyboardMouse;
+        public ControlScheme Scheme = ControlScheme.Keyboard;
         public float GyroSensitivity = 1.0f;
         public bool InvertPitch = false;
         public List<KeyBindingOverride> BindingOverrides = new List<KeyBindingOverride>();

@@ -10,7 +10,9 @@ namespace AeroTerra.UI
     /// In-flight HUD: a top status strip (drone name, active camera mode, payload
     /// status), a camera-mode-aware center reticle, a lightweight attitude cue, the
     /// bottom telemetry bar (speed/altitude/throttle/heading/battery/GPS/vertical
-    /// speed), a payload-drop key hint, and a low-battery warning banner.
+    /// speed), a payload-drop key hint, a low-battery warning banner, a wind-direction
+    /// dial, and a north-up radar minimap showing bearing/distance back to the map's
+    /// spawn origin.
     /// </summary>
     public class FlightHUD : MonoBehaviour
     {
@@ -21,6 +23,8 @@ namespace AeroTerra.UI
         private TMPro.TextMeshProUGUI _speed, _alt, _throttle, _battery, _heading, _vspeed, _lat, _lon, _warning;
         private TMPro.TextMeshProUGUI _camModeLabel, _payloadLabel, _dropHint, _fpsLabel;
         private RectTransform _batteryFill;
+        private RectTransform _powerIconHolder;
+        private RectTransform _payloadPipsRow;
         private RectTransform _reticleCross, _reticleV;
         private RectTransform[] _reticleCorners;
         private RectTransform _horizonLine;
@@ -33,6 +37,18 @@ namespace AeroTerra.UI
 
         private RectTransform _compassRing;
         private RectTransform[] _compassLabels;
+
+        private RectTransform _windDial, _windNeedle;
+        private TMPro.TextMeshProUGUI _windSpeedLabel;
+
+        private RectTransform _tempPanel;
+        private TMPro.TextMeshProUGUI _tempLabel;
+
+        private RectTransform _minimapFrame;
+        private RectTransform _minimapHome, _minimapNose;
+        private TMPro.TextMeshProUGUI _minimapDistLabel;
+        private const float MinimapRangeM = 400f;
+        private const float MinimapRadiusPx = 58f;
 
         private float _fpsSmoothed = 60f;
 
@@ -48,6 +64,9 @@ namespace AeroTerra.UI
             BuildAttitudeCue();
             BuildBottomBar();
             BuildCompass();
+            BuildWindIndicator();
+            BuildTemperatureIndicator();
+            BuildMinimap();
             BuildFpsCounter();
 
             _warning = Label(_root, "", 34, new Vector2(0.2f, 0.83f), new Vector2(0.8f, 0.89f),
@@ -55,6 +74,7 @@ namespace AeroTerra.UI
 
             SetCameraMode(CamMode.Chase);
             SetVisible(GameManager.Instance.Settings.ShowHud);
+            ApplyHudElementSettings();
         }
 
         private void BuildTopStrip()
@@ -142,13 +162,13 @@ namespace AeroTerra.UI
             if (_hardpoints <= 0 || _flight.Spec.MaxPayloadKg <= 0f) return;
 
             var kind = _flight.Spec.PayloadKind;
-            const float x0 = 0.80f, x1 = 0.98f;
-            float slot = (x1 - x0) / _hardpoints;
+            _payloadPipsRow = Panel_(bar, "PayloadPipsRow", Color.clear, new Vector2(0.80f, 0f), new Vector2(0.98f, 0.48f));
+            float slot = 1f / _hardpoints;
             _payloadPips = new UnityEngine.UI.Image[_hardpoints];
             for (int i = 0; i < _hardpoints; i++)
             {
-                float cx0 = x0 + i * slot, cx1 = cx0 + slot;
-                _payloadPips[i] = BuildPayloadPip(bar, new Vector2(cx0, 0f), new Vector2(cx1, 0.48f), kind);
+                float cx0 = i * slot, cx1 = cx0 + slot;
+                _payloadPips[i] = BuildPayloadPip(_payloadPipsRow, new Vector2(cx0, 0f), new Vector2(cx1, 1f), kind);
             }
         }
 
@@ -210,6 +230,7 @@ namespace AeroTerra.UI
         private void BuildPowerIcon(Transform parent, Vector2 anchorMin, Vector2 anchorMax, bool fuel)
         {
             var holder = Panel_(parent, "PowerIcon", Color.clear, anchorMin, anchorMax);
+            _powerIconHolder = holder;
             var bodyShade = new Color(1f, 1f, 1f, 0.18f);
             RectTransform fillArea;
 
@@ -271,6 +292,96 @@ namespace AeroTerra.UI
             _compassRing = ring;
         }
 
+        /// <summary>Small dial directly below the compass: a needle pointing the
+        /// direction WeatherSystem's current wind is blowing TOWARD (windsock
+        /// convention), plus the steady-state speed in m/s — the same figure Free
+        /// Flight's conditions screen shows (WeatherSystem.BaseWindSpeedMs, or the
+        /// manual override), not the raw force vector's magnitude (CurrentWind is a
+        /// force applied via AddForce, not a velocity, so its magnitude isn't m/s).</summary>
+        private void BuildWindIndicator()
+        {
+            var dial = Panel_(_root, "WindDial", new Color(0, 0, 0, 0.30f),
+                               new Vector2(0.14f, 0.90f), new Vector2(0.14f, 0.90f),
+                               new Vector2(-50f, -186f), new Vector2(50f, -108f));
+            _windDial = dial;
+
+            Label(dial, "WIND", 10, new Vector2(0f, 0.74f), new Vector2(1f, 0.98f),
+                  TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            _windSpeedLabel = Label(dial, "-- m/s", 13, new Vector2(0f, 0.02f), new Vector2(1f, 0.26f),
+                                    TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+
+            // Half-and-half needle (accent head / dim tail) — same "plain shapes over
+            // missing glyphs" convention as StarRow, reads as a windsock/weather-vane
+            // pointer without needing an imported icon. Rotating the shared parent
+            // (rather than head+tail separately) keeps both halves moving as one needle.
+            _windNeedle = Panel_(dial, "NeedleArea", Color.clear, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                 new Vector2(-16f, -16f), new Vector2(16f, 16f));
+            Panel_(_windNeedle, "Tail", TextDim, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                   new Vector2(-2f, -16f), new Vector2(2f, 0f));
+            Panel_(_windNeedle, "Head", Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                   new Vector2(-2f, 0f), new Vector2(2f, 16f));
+        }
+
+        /// <summary>Small instrument directly below the wind dial, same frame style —
+        /// shows the current ambient air temperature (Settings ▸ Flying Conditions),
+        /// the same figure that drives BatterySystem.PerformanceFactor's thrust derate.</summary>
+        private void BuildTemperatureIndicator()
+        {
+            var panel = Panel_(_root, "TempPanel", new Color(0, 0, 0, 0.30f),
+                                new Vector2(0.14f, 0.90f), new Vector2(0.14f, 0.90f),
+                                new Vector2(-50f, -270f), new Vector2(50f, -192f));
+            _tempPanel = panel;
+
+            Label(panel, "TEMP", 10, new Vector2(0f, 0.74f), new Vector2(1f, 0.98f),
+                  TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            _tempLabel = Label(panel, "-- °C", 13, new Vector2(0f, 0.02f), new Vector2(1f, 0.26f),
+                                TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+        }
+
+        /// <summary>Square "radar" nav readout, top-right — a framed instrument rather
+        /// than a literal top-down camera view (which would need a second camera
+        /// actively streaming Cesium 3D tiles, unverified without an Editor). North-up,
+        /// fixed at the drone (center); the only tracked point right now is the map's
+        /// spawn origin — Unity world (0,0,0) IS that origin by construction, since
+        /// MapManager.BuildWorld() sets the CesiumGeoreference there, so no lat/lon
+        /// lookup is needed for the HOME marker's bearing/distance.</summary>
+        private void BuildMinimap()
+        {
+            var frame = Panel_(_root, "MinimapFrame", new Color(Accent.r, Accent.g, Accent.b, 0.5f),
+                                new Vector2(0.98f, 0.83f), new Vector2(0.98f, 0.83f),
+                                new Vector2(-152f, -152f), new Vector2(0f, 0f));
+            _minimapFrame = frame;
+
+            Label(frame, "NAV", 11, new Vector2(0f, 0.90f), new Vector2(1f, 1f),
+                  TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            _minimapDistLabel = Label(frame, "HOME --", 11, new Vector2(0f, 0f), new Vector2(1f, 0.10f),
+                                      TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+
+            var box = Panel_(frame, "MinimapBg", new Color(0, 0, 0, 0.45f), new Vector2(0f, 0.10f), new Vector2(1f, 0.90f),
+                              new Vector2(2f, 2f), new Vector2(-2f, -2f));
+
+            // Decorative range rings (nested translucent squares, not true circles —
+            // same reasoning as the frame itself) giving a rough sense of scale.
+            Panel_(box, "RingOuter", new Color(1, 1, 1, 0.05f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                   new Vector2(-MinimapRadiusPx, -MinimapRadiusPx), new Vector2(MinimapRadiusPx, MinimapRadiusPx));
+            Panel_(box, "RingInner", new Color(1, 1, 1, 0.07f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                   new Vector2(-MinimapRadiusPx * 0.5f, -MinimapRadiusPx * 0.5f), new Vector2(MinimapRadiusPx * 0.5f, MinimapRadiusPx * 0.5f));
+
+            // HOME marker — a small accent diamond, clamped to the ring's edge once the
+            // real distance exceeds MinimapRangeM (classic off-scale radar behavior).
+            _minimapHome = Panel_(box, "Home", Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                  new Vector2(-4f, -4f), new Vector2(4f, 4f));
+            _minimapHome.localRotation = Quaternion.Euler(0, 0, 45f);
+
+            // Drone marker — fixed at center; a short nose line shows live heading
+            // (north-up map, matching the LAT/LON readout convention — the map itself
+            // never rotates, only this line does).
+            Panel_(box, "Drone", TextMain, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                   new Vector2(-3f, -3f), new Vector2(3f, 3f));
+            _minimapNose = Panel_(box, "Nose", TextMain, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                  new Vector2(-1f, 0f), new Vector2(1f, 14f));
+        }
+
         private void BuildFpsCounter()
         {
             _fpsLabel = Label(_root, "FPS --", 16, new Vector2(0.85f, 0.855f), new Vector2(0.98f, 0.895f),
@@ -305,6 +416,28 @@ namespace AeroTerra.UI
 
         /// <summary>Live-toggled from Settings ▸ Game while already in flight.</summary>
         public void SetVisible(bool visible) => _root.gameObject.SetActive(visible);
+
+        /// <summary>Applies each per-element HUD visibility toggle from Settings ▸ Game.
+        /// Called once from Init() and again live any time one is flipped from the
+        /// pause menu mid-flight. Narrator (voice+text) isn't handled here — it's
+        /// gated directly in NarratorController.Enqueue().</summary>
+        public void ApplyHudElementSettings()
+        {
+            var s = GameManager.Instance.Settings;
+            _speed.gameObject.SetActive(s.HudShowSpeed);
+            _alt.gameObject.SetActive(s.HudShowAltitude);
+            _throttle.gameObject.SetActive(s.HudShowThrottle);
+            _lat.gameObject.SetActive(s.HudShowGps);
+            _lon.gameObject.SetActive(s.HudShowGps);
+            _battery.gameObject.SetActive(s.HudShowBattery);
+            if (_powerIconHolder != null) _powerIconHolder.gameObject.SetActive(s.HudShowBattery);
+            _payloadLabel.gameObject.SetActive(s.HudShowPayload);
+            if (_payloadPipsRow != null) _payloadPipsRow.gameObject.SetActive(s.HudShowPayload);
+            if (_compassRing != null) _compassRing.gameObject.SetActive(s.HudShowCompass);
+            if (_windDial != null) _windDial.gameObject.SetActive(s.HudShowWind);
+            if (_tempPanel != null) _tempPanel.gameObject.SetActive(s.HudShowTemperature);
+            if (_minimapFrame != null) _minimapFrame.gameObject.SetActive(s.HudShowMinimap);
+        }
 
         private void OnDestroy() { if (Instance == this) Instance = null; }
 
@@ -369,6 +502,41 @@ namespace AeroTerra.UI
                 foreach (var lbl in _compassLabels) lbl.localRotation = counter;
             }
 
+            if (_windNeedle != null)
+            {
+                Vector3 wind = WeatherSystem.Instance != null ? WeatherSystem.Instance.CurrentWind : Vector3.zero;
+                // CurrentWind is a force (applied via AddForce in DroneFlightController),
+                // not a velocity, so only its DIRECTION is used here — bearing the wind
+                // blows TOWARD, windsock convention, same atan2(x,z) heading math used
+                // everywhere else in this HUD.
+                float windBearing = wind.sqrMagnitude > 0.0001f
+                    ? Mathf.Atan2(wind.x, wind.z) * Mathf.Rad2Deg : 0f;
+                _windNeedle.localEulerAngles = new Vector3(0, 0, -windBearing);
+
+                _windSpeedLabel.text = $"{GameManager.Instance.Settings.WindSpeedMs:0.0} m/s";
+            }
+
+            if (_tempLabel != null)
+                _tempLabel.text = $"{GameManager.Instance.Settings.TemperatureC:0} °C";
+
+            if (_minimapHome != null)
+            {
+                // Unity world (0,0,0) IS the map's spawn origin (see BuildMinimap's
+                // remarks) — home's position relative to the drone is just the drone's
+                // own negated XZ position, no georeference lookup needed.
+                Vector3 pos = _flight.transform.position;
+                Vector2 homeOffsetM = new Vector2(-pos.x, -pos.z);
+                float homeDistM = homeOffsetM.magnitude;
+
+                float scale = MinimapRadiusPx / MinimapRangeM;
+                Vector2 raw = homeOffsetM * scale;
+                _minimapHome.anchoredPosition = raw.magnitude > MinimapRadiusPx
+                    ? raw.normalized * MinimapRadiusPx : raw;
+                _minimapNose.localEulerAngles = new Vector3(0, 0, -heading);
+                _minimapDistLabel.text = homeDistM < 1000f
+                    ? $"HOME {homeDistM:0} m" : $"HOME {homeDistM / 1000f:0.0} km";
+            }
+
             if (_fpsLabel != null)
             {
                 _fpsSmoothed = Mathf.Lerp(_fpsSmoothed, 1f / Mathf.Max(0.0001f, Time.unscaledDeltaTime),
@@ -382,8 +550,15 @@ namespace AeroTerra.UI
             _horizonLine.anchoredPosition = new Vector2(0, Mathf.Clamp(-pitch * 0.6f, -25f, 25f));
 
             bool powerEmpty = power != null && power.IsEmpty;
+            // Battery-only: cold or hot air temperature derates thrust ceiling (see
+            // BatterySystem.PerformanceFactor / DroneFlightController) — surfaced here
+            // so a sudden performance drop reads as "why" rather than as a bug. Lower
+            // priority than the depleted/low-power warnings above it.
+            float tempC = GameManager.Instance.Settings.TemperatureC;
+            bool batteryDerated = !fuelPowered && BatterySystem.PerformanceFactor(tempC) < 0.95f;
             _warning.text = powerEmpty ? $"{powerLabel} DEPLETED"
-                          : powerPct < 0.15f ? $"LOW {powerLabel} — RETURN NOW" : "";
+                          : powerPct < 0.15f ? $"LOW {powerLabel} — RETURN NOW"
+                          : batteryDerated ? $"BATTERY {(tempC < 5f ? "COLD" : "OVERHEATING")} — REDUCED THRUST" : "";
         }
     }
 }

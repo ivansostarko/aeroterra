@@ -54,3 +54,6 @@ MonoBehaviour:
   PayloadHardpoints: 1
   HasFrontCamera: 1
   HasBackCamera: 1
+  HasThermalCamera: 1
+  Category: 1
+  FlightModel: 0

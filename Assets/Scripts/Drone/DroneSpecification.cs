@@ -34,6 +34,22 @@ namespace AeroTerra.Drone
     /// Kestrel, Bison) plus the two cargo-pod drones (Pelican, Osprey).</summary>
     public enum PayloadKind { Cargo, Warhead, GuidedAmmunition, DropAmmunition }
 
+    /// <summary>Workshop-facing category badge/icon — Military, Civilian, or Cargo/
+    /// Logistics. Independent of DroneClass/IsMilitaryClass (which already exists and
+    /// drives ordnance FX) — purely a display classification for the Workshop showroom.
+    /// Civilian is the default (enum value 0) so any spec that predates this field
+    /// deserializes safely with no migration step.</summary>
+    public enum DroneCategory { Civilian, Military, CargoLogistics }
+
+    /// <summary>Workshop-facing flight-character label — independent of
+    /// AeroTerra.Drone.DroneFlightController.FlightModelType (the enum that actually
+    /// drives flight physics, derived from ModelKind at runtime; named differently
+    /// here to avoid a type clash in this namespace). An airframe can be labeled
+    /// differently from how it actually flies — same precedent as AT-H12 Griffin's
+    /// mismatched visual model vs. spec (see CLAUDE.md). Multirotor is the default
+    /// (enum value 0) for the same no-migration reason as DroneCategory above.</summary>
+    public enum DroneFlightModel { Multirotor, FixedWing, Vtol, Rocket }
+
     /// <summary>One selectable battery pack for the Workshop's Power Cell picker —
     /// computed on the fly from DroneSpecification.GetBatteryVariants(), never
     /// authored/serialized directly, so every existing spec gets 4 meaningfully
@@ -78,6 +94,10 @@ namespace AeroTerra.Drone
         public string Manufacturer = "AeroTerra Dynamics";
         public DroneClass Class;
         public DroneModelKind ModelKind = DroneModelKind.CargoX8;
+        /// <summary>Workshop showroom classification (icon/badge) — see DroneCategory.</summary>
+        public DroneCategory Category = DroneCategory.Civilian;
+        /// <summary>Workshop showroom flight-character label — see DroneFlightModel.</summary>
+        public DroneFlightModel FlightModel = DroneFlightModel.Multirotor;
         [TextArea] public string Description;
 
         [Header("Airframe")]
@@ -122,8 +142,12 @@ namespace AeroTerra.Drone
         public bool HasFrontCamera = true;
         // Belly/rear-facing camera — also the surveillance/bombing (CamMode.Bottom) view.
         public bool HasBackCamera = false;
+        // Independent of HasFrontCamera — CamMode.Thermal used to piggyback on the front
+        // camera automatically; now its own capability, so not every airframe with a
+        // front camera also gets a thermal mode. See DroneCameraRig.IsAvailable.
+        public bool HasThermalCamera = false;
 
-        public int MaxCameras => (HasFrontCamera ? 1 : 0) + (HasBackCamera ? 1 : 0);
+        public int MaxCameras => (HasFrontCamera ? 1 : 0) + (HasBackCamera ? 1 : 0) + (HasThermalCamera ? 1 : 0);
 
         /// <summary>Military classes get ordnance pyrotechnics (bomb-drop audio, blast
         /// FX on crash/impact, diamond HUD pips); civilian classes land in dust and
@@ -159,11 +183,38 @@ namespace AeroTerra.Drone
 
         public string CameraLoadoutSummary()
         {
-            if (HasFrontCamera && HasBackCamera) return "Front + Back";
-            if (HasFrontCamera) return "Front";
-            if (HasBackCamera) return "Back";
-            return "None";
+            var parts = new System.Collections.Generic.List<string>();
+            if (HasFrontCamera) parts.Add("Front");
+            if (HasThermalCamera) parts.Add("Thermal");
+            if (HasBackCamera) parts.Add("Back");
+            return parts.Count > 0 ? string.Join(" + ", parts) : "None";
         }
+
+        /// <summary>Human-readable Workshop category label — single source of truth,
+        /// same convention as ClassLabel().</summary>
+        public string CategoryLabel() => Category switch
+        {
+            DroneCategory.Military => "MILITARY",
+            DroneCategory.CargoLogistics => "CARGO / LOGISTICS",
+            _ => "CIVILIAN",
+        };
+
+        /// <summary>Human-readable Workshop flight-model label — single source of truth,
+        /// same convention as ClassLabel()/CategoryLabel().</summary>
+        public string FlightModelLabel() => FlightModel switch
+        {
+            DroneFlightModel.FixedWing => "FIXED WING",
+            DroneFlightModel.Vtol => "VTOL HYBRID",
+            DroneFlightModel.Rocket => "ROCKET",
+            _ => "MULTIROTOR",
+        };
+
+        /// <summary>Resource path (no file extension, per Resources.Load convention) for
+        /// this drone's Workshop showroom background track — Assets/Resources/Audio/
+        /// background/menu/workshop/{ID}_workshop_screen_background.mp3, one per
+        /// registered drone, named after Id's uppercase form (e.g. "at-b5" → "AT-B5").</summary>
+        public string WorkshopMusicPath() =>
+            $"Audio/background/menu/workshop/{Id.ToUpperInvariant()}_workshop_screen_background";
 
         [Header("Audio")]
         public AudioClip EngineLoop;           // distinct clip per drone

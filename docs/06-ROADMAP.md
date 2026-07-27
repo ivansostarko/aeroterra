@@ -3,9 +3,6 @@
 Near-term
 - Real recorded engine audio per drone (replace procedural fallback)
 - More cities (the menu auto-populates from `MapDefinition.All`)
-- Photorealistic 3D Tiles option (Google P3DT via Cesium ion)
-- Replay & screenshot mode
-- Wind indicator + minimap on HUD
 - Windsock/flag prop at spawn points showing live wind direction at a glance
 - Low battery/fuel HUD warning (flashing readout + audio cue) before auto-cutoff
 - Colorblind-friendly HUD palette option in Settings ▸ Display

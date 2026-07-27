@@ -1,21 +1,28 @@
 # 05 — Controls Reference
 
 ## Flight actions
-| Action | Keyboard | KB+Mouse | Gamepad | Gyroscope (mobile) |
-|---|---|---|---|---|
-| Throttle up/down (multirotor: climb/descend · fixed-wing: engine power) | W / S | W / S | Left stick ↑↓ | On-screen slider |
-| Yaw left/right | A / D | A / D | Left stick ←→ | On-screen ⟲ ⟳ buttons |
-| Pitch fwd/back (↑ = nose down / fly forward) | ↑ / ↓ | Mouse Y (+arrows) | Right stick ↑↓ | Tilt device fwd/back |
-| Roll left/right | ← / → | Mouse X (+arrows) | Right stick ←→ | Tilt device left/right |
-| Boost (extra thrust/speed, drains battery faster) | Left Shift | Left Shift | RT | — |
-| Brake (multirotor: hard stop + hover-hold · fixed-wing: airbrake) | Space | Space | LT | — |
-| Camera (cycle chase → front → bottom → thermal) | C | C | Y | On-screen button |
-| Drop payload (cargo pod / next munition) | I | I | X | On-screen button |
-| Toggle smoke screen (if equipped in the Workshop) | U | U | A / South | On-screen button |
-| Reset drone | R | R | B | On-screen button |
-| Pause | Esc | Esc | Start | On-screen button |
+| Action | Keyboard | Gamepad | Gyroscope (mobile) |
+|---|---|---|---|
+| Throttle up/down (multirotor: climb/descend · fixed-wing: engine power) | W / S | Left stick ↑↓ | On-screen slider |
+| Yaw left/right | A / D | Left stick ←→ | On-screen ⟲ ⟳ buttons |
+| Pitch fwd/back (↑ = nose down / fly forward) | ↑ / ↓ | Right stick ↑↓ | Tilt device fwd/back |
+| Roll left/right | ← / → | Right stick ←→ | Tilt device left/right |
+| Boost (extra thrust/speed, drains battery faster) | Left Shift | RT | — |
+| Brake (multirotor: hard stop + hover-hold · fixed-wing: airbrake) | Space | LT | — |
+| Camera (cycle chase → front → bottom → thermal) | C | Y | On-screen button |
+| Drop payload (cargo pod / next munition) | I | X | On-screen button |
+| Toggle smoke screen (if equipped in the Workshop) | U | A / South | On-screen button |
+| Reset drone | R | B | On-screen button |
+| Pause | Esc | Start | On-screen button |
+| Screenshot | F9 | Select/View | On-screen button |
+| Instant Replay (press again to skip) | F10 | D-pad ↑ | On-screen button |
 
 All of these (except Pause) can be rebound in Settings ▸ Controls.
+
+## Wind indicator, minimap & instant replay
+- The HUD's left column shows a **wind dial** below the compass — a needle pointing the direction the wind is currently blowing *toward* (windsock convention) plus its current speed in m/s (Settings ▸ Flying Conditions' WIND SPEED slider, whatever it's set to). The right column shows a **NAV minimap** — a north-up radar readout with a HOME marker (bearing + distance back to the map's spawn point), clamped to the ring's edge once you're more than 400 m out.
+- **Screenshot** saves a PNG to `Application.persistentDataPath/Screenshots/` with a timestamped filename, with a brief flash + on-screen confirmation.
+- **Instant Replay** freezes the live drone in place and flies a smoothed chase camera back along the last ~90 seconds of recorded flight, then resumes live control automatically (or press Replay again to cut it short). It's a rolling buffer, not a saved recording — nothing persists after you close the game.
 
 ## Flight models
 Each airframe flies with physics matched to its class:
@@ -38,6 +45,21 @@ Each airframe flies with physics matched to its class:
 Two global rules apply to every drone: **altitude can never go below 0 m** (the
 drone rides the sea-level floor instead of tunnelling under it), and every airframe
 tops out smoothly at its spec-sheet service ceiling.
+
+## Flying Conditions (Settings ▸ Flying Conditions)
+Sky and Weather presets each drive their own visuals (time-of-day lighting, fog/
+precipitation). Wind, Temperature and Humidity are each a free-standing slider —
+picking a Weather preset resets all three to that preset's typical values (a storm
+resets you to windy/cold/humid, for instance), but every slider stays freely
+adjustable afterward; weather type is a starting point, not a lock.
+
+**Temperature affects battery-powered airframes' performance in flight**: outside a
+comfortable 5–35°C band, thrust ceiling fades (down to 60% at the extremes, -20°C or
+50°C) — a cold or overheating battery just can't deliver full power. Fuel-powered
+airframes (AT-L3 Locust, AT-J9 Wraith, AT-U11 Bison) are unaffected. A HUD warning
+("BATTERY COLD/OVERHEATING — REDUCED THRUST") appears whenever this is actually
+costing you performance. Humidity is currently descriptive only — no flight-physics
+effect yet.
 
 ## Camera views
 Pressing the camera action cycles through four views: **chase** (smooth 3rd-person follow, default), **front** (nose-mounted, normal), **bottom** (belly-mounted, for surveillance and lining up a payload drop), and **thermal** (front-mounted with a stylized heat-look color grade). The chase camera tunes itself to the airframe — tight and snappy behind the racing quad, calm and level behind the cargo octocopter, far and banking-with-the-wings behind the big UAVs. The HUD's top strip shows the active view, and the center reticle changes with it (hidden in chase, a plain cross in front, red targeting brackets in bottom, a tinted cross in thermal).
@@ -72,7 +94,6 @@ Settings ▸ Controls lists every action with its current binding. Click a bindi
 
 ## Scheme behavior details
 - **Keyboard**: pure digital axes; angle-mode assist (multirotor) / stability augmentation (fixed-wing) makes it forgiving.
-- **Keyboard + Mouse**: mouse deltas add analog fine control on pitch/roll on top of keys.
 - **Gamepad**: full analog; deadzones handled by the Input System.
 - **Gyroscope**: device attitude drives pitch/roll (sensitivity slider 0.2–3.0×); in the desktop editor a mouse fallback lets you test the scheme without a device.
 - **Invert pitch** toggle applies to all schemes.

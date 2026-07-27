@@ -26,17 +26,6 @@ namespace AeroTerra.UI
                     Note(area, "C camera · R reset · ESC pause", 0.05f, 0.08f);
                     break;
 
-                case ControlScheme.KeyboardMouse:
-                    Title(area, "KEYBOARD + MOUSE");
-                    Key(area, "W", 0.22f, 0.66f); Key(area, "S", 0.22f, 0.48f);
-                    Key(area, "A", 0.10f, 0.48f); Key(area, "D", 0.34f, 0.48f);
-                    Note(area, "W/S throttle · A/D yaw", 0.04f, 0.34f);
-                    Mouse(area, 0.68f, 0.55f);
-                    Note(area, "Mouse: fine pitch & roll", 0.55f, 0.34f);
-                    Note(area, "SHIFT boost · SPACE brake/hover", 0.04f, 0.20f);
-                    Note(area, "C camera · R reset · ESC pause", 0.04f, 0.08f);
-                    break;
-
                 case ControlScheme.Gamepad:
                     Title(area, "GAMEPAD");
                     Stick(area, 0.25f, 0.55f, "L");
@@ -69,13 +58,6 @@ namespace AeroTerra.UI
             rt.gameObject.GetComponent<UnityEngine.UI.Image>().color = new Color(0.2f, 0.25f, 0.33f);
             Label(rt, k, 22, Vector2.zero, Vector2.one, TextMain, TMPro.TextAlignmentOptions.Center,
                   TMPro.FontStyles.Bold);
-        }
-
-        private static void Mouse(RectTransform a, float x, float y)
-        {
-            var body = Panel_(a, "Mouse", PanelAlt, new Vector2(x, y - 0.12f), new Vector2(x + 0.14f, y + 0.2f));
-            body.gameObject.GetComponent<UnityEngine.UI.Image>().color = new Color(0.22f, 0.27f, 0.35f);
-            Panel_(body, "Wheel", Accent, new Vector2(0.44f, 0.75f), new Vector2(0.56f, 0.92f));
         }
 
         private static void Stick(RectTransform a, float x, float y, string label)

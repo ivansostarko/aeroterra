@@ -8,12 +8,17 @@ namespace AeroTerra.Map
 {
     /// <summary>
     /// Builds the Cesium world at runtime for the selected city and applies
-    /// map style / 3D buildings / 3D terrain from settings.
+    /// map style / 3D buildings / 3D terrain / photorealistic 3D tiles from settings.
     ///
     /// Cesium ion asset IDs used:
-    ///   1      Cesium World Terrain
-    ///   2      Bing Maps Aerial (Satellite style)
-    ///   96188  Cesium OSM Buildings
+    ///   1        Cesium World Terrain
+    ///   2        Bing Maps Aerial (Satellite style)
+    ///   96188    Cesium OSM Buildings
+    ///   2275207  Google Photorealistic 3D Tiles (Settings ▸ Map ▸ Photorealistic 3D Tiles) —
+    ///            a curated ion asset every ion account can access with its existing token,
+    ///            no separate Google API key needed. Mutually exclusive with the three above:
+    ///            it already bakes in terrain+buildings+imagery, so ApplyMapSettings() swaps
+    ///            to it rather than layering it on top.
     /// Raster styles (Liberty / OSM / Dark) come from public tile servers via
     /// TileMapServiceRasterOverlay-compatible URL templates.
     ///
@@ -35,6 +40,7 @@ namespace AeroTerra.Map
         private CesiumGeoreference _georeference;
         private Cesium3DTileset _terrainTileset;
         private Cesium3DTileset _buildingsTileset;
+        private Cesium3DTileset _photorealisticTileset;
         private CesiumUrlTemplateRasterOverlay _rasterOverlay;
         private CesiumIonRasterOverlay _satelliteOverlay;
 
@@ -166,6 +172,13 @@ namespace AeroTerra.Map
             _buildingsTileset = bGo.AddComponent<Cesium3DTileset>();
             _buildingsTileset.ionAssetID = 96188;
 
+            // --- Google Photorealistic 3D Tiles (off by default — see ApplyMapSettings) ---
+            var photoGo = new GameObject("CesiumGooglePhotorealistic");
+            photoGo.transform.SetParent(geoGo.transform, false);
+            _photorealisticTileset = photoGo.AddComponent<Cesium3DTileset>();
+            _photorealisticTileset.ionAssetID = 2275207;
+            photoGo.SetActive(false);
+
             // Point everything at the resolved ion server (covers the token-file
             // path, where the server object was created at runtime).
             if (_ionServer != null)
@@ -173,6 +186,7 @@ namespace AeroTerra.Map
                 _terrainTileset.ionServer = _ionServer;
                 _buildingsTileset.ionServer = _ionServer;
                 _satelliteOverlay.ionServer = _ionServer;
+                _photorealisticTileset.ionServer = _ionServer;
             }
         }
 
@@ -190,26 +204,34 @@ namespace AeroTerra.Map
         {
             var s = GameManager.Instance.Settings;
 
+            // Photorealistic 3D Tiles replaces the classic terrain+buildings+imagery
+            // pipeline rather than layering on top of it — Google's tileset already
+            // bakes all three in, and running both at once would double-stream tiles
+            // and z-fight against each other.
+            bool photoOn = s.Enable3DTiles && HasIonToken;
+            if (_photorealisticTileset != null) _photorealisticTileset.gameObject.SetActive(photoOn);
+
             if (_buildingsTileset != null)
-                _buildingsTileset.gameObject.SetActive(s.Enable3DBuildings && HasIonToken);
+                _buildingsTileset.gameObject.SetActive(!photoOn && s.Enable3DBuildings && HasIonToken);
 
             if (_terrainTileset != null)
             {
                 // 3D terrain needs both the setting AND a working ion token; with
-                // either missing we hide the tileset and show a flat ground plane
-                // so the drone still has something to fly over and land on.
-                bool terrainOn = s.Enable3DTerrain && HasIonToken;
+                // either missing (and photoreal tiles not covering for it either) we
+                // hide the tileset and show a flat ground plane so the drone still has
+                // something to fly over and land on.
+                bool terrainOn = !photoOn && s.Enable3DTerrain && HasIonToken;
                 _terrainTileset.gameObject.SetActive(terrainOn);
-                EnsureFlatGround(!terrainOn);
+                EnsureFlatGround(!terrainOn && !photoOn);
             }
 
             bool satellite = s.Style == MapStyle.Satellite;
             if (_satelliteOverlay != null)
-                _satelliteOverlay.enabled = satellite && HasIonToken;
+                _satelliteOverlay.enabled = !photoOn && satellite && HasIonToken;
             if (_rasterOverlay != null)
             {
-                _rasterOverlay.enabled = !satellite;
-                if (!satellite)
+                _rasterOverlay.enabled = !photoOn && !satellite;
+                if (!photoOn && !satellite)
                     _rasterOverlay.templateUrl = StyleUrl(s.Style, s.ShowMapPlaceLabels);
             }
 
@@ -224,6 +246,7 @@ namespace AeroTerra.Map
             float mse = Mathf.Lerp(32f, 8f, Mathf.Clamp01(slider01));
             if (_terrainTileset != null) _terrainTileset.maximumScreenSpaceError = mse;
             if (_buildingsTileset != null) _buildingsTileset.maximumScreenSpaceError = mse;
+            if (_photorealisticTileset != null) _photorealisticTileset.maximumScreenSpaceError = mse;
         }
 
         private GameObject _flatGround;

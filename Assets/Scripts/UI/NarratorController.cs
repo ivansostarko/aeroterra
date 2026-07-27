@@ -184,6 +184,10 @@ namespace AeroTerra.UI
 
         private void Enqueue(string resourcePath, string subtitle)
         {
+            // Settings ▸ Game ▸ HUD Elements ▸ Narrator (voice & text) — disabling it
+            // stops both the voice line audio and the subtitle text at the source,
+            // rather than muting/hiding each independently downstream.
+            if (!GameManager.Instance.Settings.HudShowNarrator) return;
             _queue.Enqueue((resourcePath, subtitle));
             if (_drainRoutine == null) _drainRoutine = StartCoroutine(DrainQueue());
         }

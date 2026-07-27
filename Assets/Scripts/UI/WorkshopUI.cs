@@ -172,6 +172,7 @@ namespace AeroTerra.UI
                 _specsSubTab = 0;
                 _camDist = Mathf.Clamp(_ctrl.ModelRadius * 2.2f, 1.0f, MaxCamDist);
                 UpdateCamera();
+                Core.AudioManager.Instance?.PlayWorkshopMusic(spec.WorkshopMusicPath());
             }
 
             _root = Panel_(Canvas.transform, "Workshop", Color.clear, Vector2.zero, Vector2.one);
@@ -260,8 +261,10 @@ namespace AeroTerra.UI
             Panel_(card, "Stripe", selected ? Accent : new Color(1, 1, 1, 0.06f),
                    Vector2.zero, new Vector2(0.02f, 1f));
 
-            Label(card, spec.DisplayName, 19, new Vector2(0.08f, 0.60f), new Vector2(0.94f, 0.95f),
+            Label(card, spec.DisplayName, 19, new Vector2(0.08f, 0.60f), new Vector2(0.80f, 0.95f),
                   selected ? TextMain : TextDim, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
+            var cardIconArea = Panel_(card, "CategoryIcon", Color.clear, new Vector2(0.83f, 0.62f), new Vector2(0.95f, 0.93f));
+            PaintCategoryGlyph(cardIconArea, spec.Category);
             Label(card, $"{spec.ClassLabel()} · {spec.RotorCount} ROTORS", 12,
                   new Vector2(0.08f, 0.36f), new Vector2(0.94f, 0.58f),
                   selected ? Accent : TextDim);
@@ -317,6 +320,16 @@ namespace AeroTerra.UI
                             new Vector2(x0, 0.79f), new Vector2(x1, 0.828f), Accent);
             sub.raycastTarget = false;
 
+            // Category badge (Military / Civilian / Cargo-Logistics) — icon + label chip.
+            var catBadge = Panel_(_root, "CategoryBadge", new Color(Bg.r, Bg.g, Bg.b, 0.72f),
+                                  new Vector2(x0, 0.752f), new Vector2(x0 + 0.17f, 0.786f));
+            catBadge.GetComponent<Image>().raycastTarget = false;
+            var catIconArea = Panel_(catBadge, "IconArea", Color.clear, new Vector2(0f, 0f), new Vector2(0.26f, 1f));
+            PaintCategoryGlyph(catIconArea, spec.Category);
+            var catLabel = Label(catBadge, spec.CategoryLabel(), 12, new Vector2(0.30f, 0f), new Vector2(0.97f, 1f),
+                                 TextMain, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
+            catLabel.raycastTarget = false;
+
             // Live performance chips.
             const int chips = 4; const float chipGap = 0.01f;
             float chipW = (x1 - x0 - (chips - 1) * chipGap) / chips;
@@ -371,7 +384,7 @@ namespace AeroTerra.UI
                 // a taller "panel" and its normalized Y coordinates resolve against that.
                 var (viewport, content, _) = ScrollList(panel, "LoadoutScroll",
                     new Vector2(0f, 0f), new Vector2(1f, 0.935f));
-                content.sizeDelta = new Vector2(0f, viewport.rect.height * 1.5f);
+                content.sizeDelta = new Vector2(0f, viewport.rect.height * 1.65f);
                 BuildLoadoutTab(content, spec);
                 return;
             }
@@ -442,6 +455,8 @@ namespace AeroTerra.UI
                 _ => new (string, string)[]
                 {
                     ("CLASS",              spec.ClassLabel()),
+                    ("CATEGORY",           spec.CategoryLabel()),
+                    ("FLIGHT MODEL",       spec.FlightModelLabel()),
                     ("EMPTY MASS",         $"{spec.EmptyMassKg:0.#} kg"),
                     ("WINGSPAN",           $"{spec.WingspanM:0.##} m"),
                     ("ROTORS",             $"{spec.RotorCount}"),
@@ -465,50 +480,93 @@ namespace AeroTerra.UI
             }
         }
 
-        // Main color, power cell, payload, skin, additional loadout, save. Scrollable
-        // (see BuildSidePanel) — content is 1.5x the viewport's height, so every Y
-        // coordinate below is 2/3 of what it'd be in a non-scrolling one-screen panel,
-        // freeing 0.59..1.0 for MAIN COLOR while keeping every other section's relative
-        // spacing (and physical on-screen size) exactly as before.
+        // Onboard cameras (read-only note), main color, power cell, payload, skin,
+        // additional loadout, save. Scrollable (see BuildSidePanel) — content is 1.65x
+        // the viewport's height, so every Y coordinate below is ~0.606x what it'd be in
+        // a non-scrolling one-screen panel, freeing 0.84..1.0 for the new ONBOARD
+        // CAMERAS section on top while keeping every other section's relative spacing
+        // (and physical on-screen size) exactly as before.
         private void BuildLoadoutTab(Transform panel, DroneSpecification spec)
         {
             bool fuelPowered = spec.PowerSystem == PowerSystemType.Fuel;
 
-            SectionHeader(panel, "MAIN COLOR", 0.925f);
-            BuildBodyColorSwatches(panel, 0.700f, 0.880f);
+            SectionHeader(panel, "ONBOARD CAMERAS", 0.948f);
+            BuildCameraBadges(panel, spec, 0.878f, 0.928f);
+            Label(panel, CameraNoteText(spec), 12, new Vector2(0.06f, 0.852f), new Vector2(0.94f, 0.875f), TextDim);
 
-            SectionHeader(panel, fuelPowered ? "FUEL TANK" : "POWER CELL", 0.590f);
-            _powerLine = Label(panel, "", 12, new Vector2(0.06f, 0.467f), new Vector2(0.94f, 0.489f), TextDim);
+            SectionHeader(panel, "MAIN COLOR", 0.841f);
+            BuildBodyColorSwatches(panel, 0.636f, 0.800f);
+
+            SectionHeader(panel, fuelPowered ? "FUEL TANK" : "POWER CELL", 0.536f);
+            _powerLine = Label(panel, "", 12, new Vector2(0.06f, 0.425f), new Vector2(0.94f, 0.445f), TextDim);
             if (fuelPowered)
-                BuildFuelCards(panel, spec, 0.493f, 0.550f);
+                BuildFuelCards(panel, spec, 0.448f, 0.500f);
             else
-                BuildBatteryCards(panel, spec, 0.493f, 0.550f);
+                BuildBatteryCards(panel, spec, 0.448f, 0.500f);
             RefreshPowerLine(spec);
 
-            SectionHeader(panel, $"PAYLOAD — {spec.PayloadTypeName.ToUpper()}", 0.437f);
-            BuildPayloadRow(panel, spec, 0.377f, 0.410f);
-            _massLine = Label(panel, "", 13, new Vector2(0.06f, 0.350f), new Vector2(0.94f, 0.375f), TextDim);
+            SectionHeader(panel, $"PAYLOAD — {spec.PayloadTypeName.ToUpper()}", 0.397f);
+            BuildPayloadRow(panel, spec, 0.343f, 0.373f);
+            _massLine = Label(panel, "", 13, new Vector2(0.06f, 0.318f), new Vector2(0.94f, 0.341f), TextDim);
 
             // Only offered when the current airframe has a payload model to show.
             if (_ctrl.HasPayloadVisual)
-                Toggle_(panel, "Display payload on model", new Vector2(0.06f, 0.319f), new Vector2(0.94f, 0.345f),
+                Toggle_(panel, "Display payload on model", new Vector2(0.06f, 0.290f), new Vector2(0.94f, 0.314f),
                         _ctrl.ShowPayload, v => _ctrl.SetShowPayload(v), 13);
 
-            SectionHeader(panel, "SKIN", 0.293f);
-            BuildSkinCards(panel, spec, 0.223f, 0.273f);
+            SectionHeader(panel, "SKIN", 0.266f);
+            BuildSkinCards(panel, spec, 0.203f, 0.248f);
 
-            SectionHeader(panel, "ADDITIONAL LOADOUT", 0.200f);
-            Toggle_(panel, "Smoke screen", new Vector2(0.06f, 0.160f), new Vector2(0.48f, 0.187f),
+            SectionHeader(panel, "ADDITIONAL LOADOUT", 0.182f);
+            Toggle_(panel, "Smoke screen", new Vector2(0.06f, 0.145f), new Vector2(0.48f, 0.170f),
                     _ctrl.Working.SmokeScreenEquipped, v => { _ctrl.SetSmokeScreen(v); RefreshLive(); }, 13);
-            Label(panel, $"+{LoadoutExtras.SmokeScreenKg:0.##} kg", 12, new Vector2(0.50f, 0.160f), new Vector2(0.68f, 0.187f), TextDim);
-            Label(panel, "COMMS", 12, new Vector2(0.06f, 0.137f), new Vector2(0.40f, 0.157f), Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
-            BuildCommsCards(panel, 0.077f, 0.130f);
+            Label(panel, $"+{LoadoutExtras.SmokeScreenKg:0.##} kg", 12, new Vector2(0.50f, 0.145f), new Vector2(0.68f, 0.170f), TextDim);
+            Label(panel, "COMMS", 12, new Vector2(0.06f, 0.125f), new Vector2(0.40f, 0.143f), Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
+            BuildCommsCards(panel, 0.070f, 0.118f);
 
-            _nameField = Input_(panel, "Configuration name…", new Vector2(0.06f, 0.039f), new Vector2(0.94f, 0.067f));
-            Button_(panel, "SAVE CONFIGURATION", new Vector2(0.06f, 0.0f), new Vector2(0.94f, 0.033f),
+            _nameField = Input_(panel, "Configuration name…", new Vector2(0.06f, 0.035f), new Vector2(0.94f, 0.061f));
+            Button_(panel, "SAVE CONFIGURATION", new Vector2(0.06f, 0.0f), new Vector2(0.94f, 0.030f),
                     SaveConfig, Accent, 16);
-            _saveFeedback = Label(panel, "", 11, new Vector2(0.06f, 0.067f), new Vector2(0.94f, 0.077f),
+            _saveFeedback = Label(panel, "", 11, new Vector2(0.06f, 0.061f), new Vector2(0.94f, 0.070f),
                                   Accent, TMPro.TextAlignmentOptions.Right);
+        }
+
+        /// <summary>Read-only row of camera badges — Front / Thermal / Bottom Surveillance —
+        /// reflecting this airframe's fixed DroneSpecification camera bools (not player-
+        /// editable, same spirit as the payload-kind badge). Equipped cameras highlight
+        /// in Accent; unfitted ones stay dim, same visual language as BuildCommsCards.</summary>
+        private void BuildCameraBadges(Transform panel, DroneSpecification spec, float y0, float y1)
+        {
+            var defs = new (string name, bool has)[]
+            {
+                ("FRONT CAMERA", spec.HasFrontCamera),
+                ("THERMAL CAMERA", spec.HasThermalCamera),
+                ("BOTTOM SURVEILLANCE", spec.HasBackCamera),
+            };
+            const float gap = 0.012f;
+            float cellW = (0.94f - 0.06f - (defs.Length - 1) * gap) / defs.Length;
+            for (int i = 0; i < defs.Length; i++)
+            {
+                var (name, has) = defs[i];
+                float x0 = 0.06f + i * (cellW + gap), x1 = x0 + cellW;
+                var card = Panel_(panel, "Cam_" + name, has ? PanelAlt : Panel, new Vector2(x0, y0), new Vector2(x1, y1));
+                Panel_(card, "Stripe", has ? Accent : new Color(1, 1, 1, 0.08f), Vector2.zero, new Vector2(1f, 0.10f));
+                Label(card, name, 11, new Vector2(0.05f, 0.42f), new Vector2(0.95f, 0.92f),
+                      has ? TextMain : TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+                Label(card, has ? "EQUIPPED" : "NOT FITTED", 9, new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.40f),
+                      has ? Accent : new Color(1, 1, 1, 0.25f), TMPro.TextAlignmentOptions.Center);
+            }
+        }
+
+        /// <summary>Plain-English summary of BuildCameraBadges' data, for the caption line
+        /// underneath — e.g. "Enabled: Front Camera, Thermal Camera, Bottom Surveillance."</summary>
+        private static string CameraNoteText(DroneSpecification spec)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            if (spec.HasFrontCamera) parts.Add("Front Camera");
+            if (spec.HasThermalCamera) parts.Add("Thermal Camera");
+            if (spec.HasBackCamera) parts.Add("Bottom Surveillance");
+            return parts.Count > 0 ? $"Enabled: {string.Join(", ", parts)}." : "No onboard cameras fitted.";
         }
 
         private static readonly (string name, Color color)[] BodyColorPalette =
@@ -718,6 +776,34 @@ namespace AeroTerra.UI
             }
         }
 
+        /// <summary>Small glyph distinguishing the three Workshop drone categories at a
+        /// glance — plain shapes, same convention as PaintPayloadGlyph. Military = a
+        /// chevron (rank-insignia read), Cargo/Logistics = a boxy crate silhouette
+        /// (echoes the cargo payload glyph), Civilian = a plain circle.</summary>
+        private static void PaintCategoryGlyph(Transform area, DroneCategory category)
+        {
+            switch (category)
+            {
+                case DroneCategory.Military:
+                    var chevA = Panel_(area, "ChevA", AccentWarn, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                       new Vector2(-9, 1), new Vector2(0, 9));
+                    chevA.localRotation = Quaternion.Euler(0, 0, -35f);
+                    var chevB = Panel_(area, "ChevB", AccentWarn, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                       new Vector2(0, 1), new Vector2(9, 9));
+                    chevB.localRotation = Quaternion.Euler(0, 0, 35f);
+                    break;
+                case DroneCategory.CargoLogistics:
+                    var crate = Panel_(area, "Glyph", new Color(0.15f, 0.45f, 0.75f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                       new Vector2(-9, -8), new Vector2(9, 8));
+                    Panel_(crate, "Strap", new Color(0, 0, 0, 0.35f), new Vector2(0, 0.42f), new Vector2(1, 0.58f));
+                    break;
+                default: // Civilian
+                    Panel_(area, "Glyph", Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                           new Vector2(-8, -8), new Vector2(8, 8));
+                    break;
+            }
+        }
+
         private void BuildSkinCards(Transform panel, DroneSpecification spec, float y0, float y1)
         {
             var ids = Procedural.DroneSkinBuilder.SkinIds;
@@ -887,6 +973,8 @@ namespace AeroTerra.UI
         private void Close()
         {
             Clear();
+            Core.AudioManager.Instance?.StopWorkshopMusic();
+            Core.AudioManager.Instance?.PlayMenuMusic();
             if (_wsCam != null) Destroy(_wsCam.gameObject);
             if (_stageRT != null) { _stageRT.Release(); Destroy(_stageRT); _stageRT = null; }
             if (_stageRig != null) Destroy(_stageRig);

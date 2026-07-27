@@ -153,7 +153,7 @@ namespace AeroTerra.UI
             return mode switch
             {
                 CamMode.Front => spec.HasFrontCamera,
-                CamMode.Thermal => spec.HasFrontCamera, // thermal is a mode of the front camera, not a separate one
+                CamMode.Thermal => spec.HasThermalCamera,
                 CamMode.Bottom => spec.HasBackCamera,
                 _ => true, // Chase
             };

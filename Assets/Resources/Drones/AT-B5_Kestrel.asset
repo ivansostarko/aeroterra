@@ -53,4 +53,7 @@ MonoBehaviour:
   DefaultAccentColor: {r: 0.45, g: 0.12, b: 0.12, a: 1}
   PayloadHardpoints: 4
   HasFrontCamera: 1
-  HasBackCamera: 0
+  HasBackCamera: 1
+  HasThermalCamera: 1
+  Category: 1
+  FlightModel: 1

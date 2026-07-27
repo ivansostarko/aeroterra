@@ -8,15 +8,16 @@ using static AeroTerra.UI.UIBuilder;
 namespace AeroTerra.UI
 {
     /// <summary>
-    /// Settings window: vertical tab sidebar — GAME · VIDEO · AUDIO · MAP · CONTROLS ·
-    /// KEY BINDINGS. Every change is live-applied and persisted immediately; SAVE at the
-    /// top re-applies everything at once as an explicit, visible confirmation.
-    /// Usable both from the main menu and the in-flight pause menu.
+    /// Settings window: vertical tab sidebar — GAME · FLYING CONDITIONS · VIDEO · AUDIO ·
+    /// MAP · CONTROLS · KEY BINDINGS. Every change is live-applied and persisted
+    /// immediately; SAVE at the top re-applies everything at once as an explicit,
+    /// visible confirmation. Usable both from the main menu and the in-flight pause menu.
     /// </summary>
     public class SettingsUI : MonoBehaviour
     {
-        private const int TabGame = 0, TabVideo = 1, TabAudio = 2, TabMap = 3, TabControls = 4, TabKeyBindings = 5;
-        private static readonly string[] TabNames = { "GAME", "VIDEO", "AUDIO", "MAP", "CONTROLS", "KEY BINDINGS" };
+        private const int TabGame = 0, TabConditions = 1, TabVideo = 2, TabAudio = 3, TabMap = 4, TabControls = 5, TabKeyBindings = 6;
+        private static readonly string[] TabNames =
+            { "GAME", "FLYING CONDITIONS", "VIDEO", "AUDIO", "MAP", "CONTROLS", "KEY BINDINGS" };
 
         private RectTransform _root, _content;
         private System.Action _onBack;
@@ -104,6 +105,21 @@ namespace AeroTerra.UI
             }
 
             _content = Panel_(_root, "Content", Panel, new Vector2(0.25f, 0.10f), new Vector2(0.97f, 0.86f));
+
+            if (_tab == TabConditions)
+            {
+                // Wind/Temperature/Humidity sliders on top of Sky/Weather outgrew one
+                // screen's worth of space — scrollable, same ScrollList primitive
+                // Workshop's Loadout tab uses. _content is reassigned to the taller
+                // scroll content for the rest of this Build() call so BuildConditions()
+                // needs no parameter — it already just writes through the _content field.
+                var (viewport, scrollContent, _) = ScrollList(_content, "ConditionsScroll", Vector2.zero, Vector2.one);
+                scrollContent.sizeDelta = new Vector2(0f, viewport.rect.height * 1.5f);
+                _content = scrollContent;
+                BuildConditions();
+                return;
+            }
+
             switch (_tab)
             {
                 case TabGame: BuildGame(); break;
@@ -129,6 +145,7 @@ namespace AeroTerra.UI
             Map.WeatherSystem.Instance?.Apply(s.Weather);
             Map.WeatherSystem.Instance?.ApplyEffectsQuality(s.Effects);
             FlightHUD.Instance?.SetVisible(s.ShowHud);
+            FlightHUD.Instance?.ApplyHudElementSettings();
         }
 
         // ---------------- GAME ----------------
@@ -136,84 +153,154 @@ namespace AeroTerra.UI
         {
             var s = GameManager.Instance.Settings;
 
-            Toggle_(_content, "Show HUD (speed, altitude, GPS, battery)", new Vector2(0.04f, 0.88f), new Vector2(0.7f, 0.95f),
+            Toggle_(_content, "Show HUD", new Vector2(0.04f, 0.90f), new Vector2(0.5f, 0.97f),
                     s.ShowHud, v =>
                     {
                         s.ShowHud = v;
                         FlightHUD.Instance?.SetVisible(v);
                         GameManager.Instance.SaveSettings();
-                    });
+                    }, 22);
+            Label(_content, "Master switch — turns the entire in-flight HUD on or off.", 13,
+                  new Vector2(0.09f, 0.855f), new Vector2(0.9f, 0.885f), TextDim);
 
-            Label(_content, "SKY", 22, new Vector2(0.04f, 0.74f), new Vector2(0.3f, 0.81f),
+            Panel_(_content, "Divider", new Color(Accent.r, Accent.g, Accent.b, 0.3f),
+                   new Vector2(0.04f, 0.825f), new Vector2(0.96f, 0.828f));
+
+            Label(_content, "HUD ELEMENTS", 18, new Vector2(0.04f, 0.775f), new Vector2(0.6f, 0.815f),
+                  Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
+            Label(_content, "Show or hide individual instruments in flight — every element is on by default.", 13,
+                  new Vector2(0.04f, 0.74f), new Vector2(0.96f, 0.775f), TextDim);
+
+            var group = Panel_(_content, "HudElementsGroup", PanelAlt, new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.725f));
+
+            var elements = new (string label, bool value, System.Action<bool> set)[]
+            {
+                ("Speed",                    s.HudShowSpeed,       v => s.HudShowSpeed = v),
+                ("Altitude",                 s.HudShowAltitude,    v => s.HudShowAltitude = v),
+                ("GPS Coordinates",          s.HudShowGps,         v => s.HudShowGps = v),
+                ("Battery / Fuel",           s.HudShowBattery,     v => s.HudShowBattery = v),
+                ("Narrator (voice & text)",  s.HudShowNarrator,    v => s.HudShowNarrator = v),
+                ("Payload Indicator",        s.HudShowPayload,     v => s.HudShowPayload = v),
+                ("Compass",                  s.HudShowCompass,     v => s.HudShowCompass = v),
+                ("Mini Map",                 s.HudShowMinimap,     v => s.HudShowMinimap = v),
+                ("Wind",                     s.HudShowWind,        v => s.HudShowWind = v),
+                ("Throttle",                 s.HudShowThrottle,    v => s.HudShowThrottle = v),
+                ("Temperature",              s.HudShowTemperature, v => s.HudShowTemperature = v),
+            };
+
+            const int cols = 2;
+            int rows = Mathf.CeilToInt(elements.Length / (float)cols);
+            float colW = 1f / cols;
+            float rowH = 1f / rows;
+            for (int i = 0; i < elements.Length; i++)
+            {
+                int col = i % cols, row = i / cols;
+                float x0 = col * colW + 0.03f, x1 = (col + 1) * colW - 0.03f;
+                float y1 = 1f - row * rowH - 0.02f, y0 = 1f - (row + 1) * rowH + 0.02f;
+                var (label, value, set) = elements[i];
+                Toggle_(group, label, new Vector2(x0, y0), new Vector2(x1, y1), value, v =>
+                {
+                    set(v);
+                    GameManager.Instance.SaveSettings();
+                    FlightHUD.Instance?.ApplyHudElementSettings();
+                }, 17);
+            }
+        }
+
+        // ---------------- FLYING CONDITIONS ----------------
+        // Sky / Weather / Wind used to live in GAME — split out into their own tab since
+        // they'd outgrown sharing space with Show HUD, then grew further (Temperature,
+        // Humidity, and Wind's redesign from an on/off override into a plain slider).
+        // Same SettingsData fields, same appliers; FreeFlightMenuUI's own Flying
+        // Conditions screen (shown right before launching a flight) reads/writes these
+        // same fields independently, so this tab doesn't touch that screen — see its
+        // BuildConditionsScreen (it keeps its own read-only Wind readout, no
+        // Temperature/Humidity controls there — this task only asked for Settings).
+        private void BuildConditions()
+        {
+            var s = GameManager.Instance.Settings;
+
+            Label(_content, "SKY", 22, new Vector2(0.04f, 0.90f), new Vector2(0.3f, 0.96f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
             OptionRow(_content, new[] { SkyPreset.Day, SkyPreset.Dawn, SkyPreset.Dusk, SkyPreset.Night },
-                s.Sky, new Vector2(0.04f, 0.66f), new Vector2(0.96f, 0.73f),
+                s.Sky, new Vector2(0.04f, 0.83f), new Vector2(0.96f, 0.89f),
                 sky => { s.Sky = sky; GameManager.Instance.SaveSettings(); Map.SkySystem.Instance?.Apply(sky); });
 
-            Label(_content, "WEATHER", 22, new Vector2(0.04f, 0.52f), new Vector2(0.4f, 0.59f),
+            Label(_content, "WEATHER", 22, new Vector2(0.04f, 0.73f), new Vector2(0.4f, 0.79f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
-            TMPro.TextMeshProUGUI windValueLabel = null;
-            RectTransform windFill = null;
+            // Picking a weather type resets Wind/Temperature/Humidity below to that
+            // preset's typical values (a full Build() refreshes every slider's position
+            // + label to match) — each stays freely adjustable afterward, this is a
+            // sensible starting point per weather, not a lock.
             OptionRow(_content,
                 new[] { WeatherPreset.Clear, WeatherPreset.Cloudy, WeatherPreset.Rain,
                         WeatherPreset.Storm, WeatherPreset.Fog, WeatherPreset.Snow },
-                s.Weather, new Vector2(0.04f, 0.44f), new Vector2(0.96f, 0.51f),
+                s.Weather, new Vector2(0.04f, 0.66f), new Vector2(0.96f, 0.72f),
                 w =>
                 {
                     s.Weather = w;
+                    s.WindSpeedMs = Map.WeatherSystem.BaseWindSpeedMs(w);
+                    s.TemperatureC = Map.WeatherSystem.BaseTemperatureC(w);
+                    s.HumidityPercent = Map.WeatherSystem.BaseHumidityPercent(w);
                     GameManager.Instance.SaveSettings();
                     Map.WeatherSystem.Instance?.Apply(w);
-                    SetWindRow(windValueLabel, windFill, s);
+                    Build();
                 });
 
-            Label(_content, "WIND", 22, new Vector2(0.04f, 0.35f), new Vector2(0.3f, 0.42f),
+            Label(_content, "WIND", 22, new Vector2(0.04f, 0.58f), new Vector2(0.3f, 0.64f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
-            windValueLabel = Label(_content, "", 16, new Vector2(0.3f, 0.35f), new Vector2(0.96f, 0.42f),
-                                   TextMain, TMPro.TextAlignmentOptions.Right);
-            var windTrack = Panel_(_content, "WindTrack", PanelAlt, new Vector2(0.04f, 0.315f), new Vector2(0.96f, 0.355f));
-            windFill = Panel_(windTrack, "WindFill", Accent, Vector2.zero, new Vector2(0f, 1f));
+            var windValueLabel = Label(_content, "", 16, new Vector2(0.3f, 0.58f), new Vector2(0.96f, 0.64f),
+                                       TextMain, TMPro.TextAlignmentOptions.Right);
+            var windTrack = Panel_(_content, "WindTrack", PanelAlt, new Vector2(0.04f, 0.555f), new Vector2(0.96f, 0.575f));
+            var windFill = Panel_(windTrack, "WindFill", Accent, Vector2.zero, new Vector2(0f, 1f));
 
-            // Manual override: WeatherSystem.Update() polls these two fields live every
-            // frame (same pull pattern DroneFlightController already uses for
-            // InvertPitch), so these callbacks only need to persist the setting — no
-            // separate "apply" call is needed for the override to take effect in flight.
-            Toggle_(_content, "Manual wind override (ignore weather, fly a fixed speed)",
-                    new Vector2(0.04f, 0.24f), new Vector2(0.8f, 0.29f),
-                    s.ManualWindEnabled, v =>
-                    {
-                        s.ManualWindEnabled = v;
-                        GameManager.Instance.SaveSettings();
-                        SetWindRow(windValueLabel, windFill, s);
-                    }, 16);
-
-            SliderRow("MANUAL WIND SPEED", Mathf.InverseLerp(0f, ManualWindMaxMs, s.ManualWindSpeedMs), 0.185f,
+            // WeatherSystem.Update() polls WindSpeedMs live every frame (same pull
+            // pattern DroneFlightController already uses for InvertPitch), so this
+            // callback only needs to persist the setting — no separate apply call.
+            SliderRow("WIND SPEED", Mathf.InverseLerp(0f, WindMaxMs, s.WindSpeedMs), 0.50f,
                 new Vector2(0.04f, 0.96f),
                 v =>
                 {
-                    s.ManualWindSpeedMs = Mathf.Lerp(0f, ManualWindMaxMs, v);
+                    s.WindSpeedMs = Mathf.Lerp(0f, WindMaxMs, v);
                     GameManager.Instance.SaveSettings();
                     SetWindRow(windValueLabel, windFill, s);
                 },
-                v => $"{Mathf.Lerp(0f, ManualWindMaxMs, v):0.0} m/s");
-
+                v => $"{Mathf.Lerp(0f, WindMaxMs, v):0.0} m/s");
             SetWindRow(windValueLabel, windFill, s);
+
+            // Temperature feeds BatterySystem.PerformanceFactor in flight — too cold or
+            // too hot and battery-powered airframes lose thrust ceiling (fuel-powered
+            // ones are unaffected). Purely descriptive for now on the Humidity side.
+            SliderRow("TEMPERATURE", Mathf.InverseLerp(MinTemperatureC, MaxTemperatureC, s.TemperatureC), 0.36f,
+                new Vector2(0.04f, 0.96f),
+                v =>
+                {
+                    s.TemperatureC = Mathf.Lerp(MinTemperatureC, MaxTemperatureC, v);
+                    GameManager.Instance.SaveSettings();
+                },
+                v => $"{Mathf.Lerp(MinTemperatureC, MaxTemperatureC, v):0}°C");
+
+            SliderRow("HUMIDITY", s.HumidityPercent / 100f, 0.22f, new Vector2(0.04f, 0.96f),
+                v =>
+                {
+                    s.HumidityPercent = v * 100f;
+                    GameManager.Instance.SaveSettings();
+                },
+                v => $"{v * 100f:0}%");
         }
 
-        /// <summary>Wind readout — normally not a user control at all (wind is entirely
-        /// derived from the selected weather preset, see WeatherSystem.BaseWindForPreset)
-        /// but reflects the manual override below it when that's enabled, so this always
-        /// shows the ACTUAL wind flight physics will use, whichever source governs it.
-        /// Shared visual pattern with FreeFlightMenuUI's Flying Conditions screen.</summary>
+        /// <summary>Wind readout — a plain live figure now (Wind is a single free slider,
+        /// no on/off override concept anymore). Shared visual pattern with
+        /// FreeFlightMenuUI's Flying Conditions screen (its own private copy).</summary>
         private const float MaxWindMeterMs = 10.5f;
-        private const float ManualWindMaxMs = 15f;
+        private const float WindMaxMs = 15f;
+        private const float MinTemperatureC = -20f, MaxTemperatureC = 50f;
 
         private static void SetWindRow(TMPro.TextMeshProUGUI valueLabel, RectTransform fill, SettingsData s)
         {
             if (valueLabel == null || fill == null) return;
-            float speedMs = s.ManualWindEnabled ? s.ManualWindSpeedMs : Map.WeatherSystem.BaseWindSpeedMs(s.Weather);
-            string source = s.ManualWindEnabled ? "MANUAL" : s.Weather.ToString().ToUpper();
-            valueLabel.text = $"{speedMs:0.0} m/s — {source}";
-            fill.anchorMax = new Vector2(Mathf.Clamp01(speedMs / Mathf.Max(MaxWindMeterMs, ManualWindMaxMs)), 1f);
+            valueLabel.text = $"{s.WindSpeedMs:0.0} m/s";
+            fill.anchorMax = new Vector2(Mathf.Clamp01(s.WindSpeedMs / Mathf.Max(MaxWindMeterMs, WindMaxMs)), 1f);
         }
 
         // ---------------- VIDEO ----------------
@@ -425,6 +512,16 @@ namespace AeroTerra.UI
                         GameManager.Instance.SaveSettings();
                         Map.MapManager.Instance?.ApplyMapSettings();
                     });
+
+            Toggle_(_content, "Photorealistic 3D Tiles", new Vector2(0.52f, 0.38f), new Vector2(0.96f, 0.45f),
+                    s.Enable3DTiles, v =>
+                    {
+                        s.Enable3DTiles = v;
+                        GameManager.Instance.SaveSettings();
+                        Map.MapManager.Instance?.ApplyMapSettings();
+                    });
+            Label(_content, "Google, streamed via Cesium ion — replaces 3D Buildings/Terrain and\nthe map style's imagery above with Google's own photorealistic mesh.",
+                  11, new Vector2(0.52f, 0.28f), new Vector2(0.96f, 0.37f), TextDim);
         }
 
         private void BuildStyleCards(SettingsData s)
@@ -473,7 +570,7 @@ namespace AeroTerra.UI
             Label(_content, "CONTROL SCHEME", 22, new Vector2(0.04f, 0.90f), new Vector2(0.6f, 0.97f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
             OptionRow(_content,
-                new[] { ControlScheme.Keyboard, ControlScheme.KeyboardMouse, ControlScheme.Gamepad, ControlScheme.Gyroscope },
+                new[] { ControlScheme.Keyboard, ControlScheme.Gamepad, ControlScheme.Gyroscope },
                 s.Scheme, new Vector2(0.04f, 0.82f), new Vector2(0.96f, 0.89f),
                 scheme =>
                 {
@@ -485,7 +582,6 @@ namespace AeroTerra.UI
                 scheme => scheme switch
                 {
                     ControlScheme.Keyboard => "KEYBOARD",
-                    ControlScheme.KeyboardMouse => "KEYBOARD + MOUSE",
                     ControlScheme.Gamepad => "GAMEPAD",
                     _ => "GYROSCOPE"
                 });

@@ -80,11 +80,18 @@ namespace AeroTerra.Core
 
         public void PlayCreditsMusic() => PlayBackgroundTrack("Audio/background/credits_game_menu_background");
 
+        /// <summary>Workshop showroom's per-drone track (see DroneSpecification.
+        /// WorkshopMusicPath) — swaps whenever the selected airframe changes, same
+        /// shared/mutually-exclusive _musicSource as the other PlayXMusic calls above.</summary>
+        public void PlayWorkshopMusic(string resourcePath) => PlayBackgroundTrack(resourcePath);
+
         public void StopMenuMusic() => StopBackgroundTrack();
 
         public void StopFreeFlightMusic() => StopBackgroundTrack();
 
         public void StopCreditsMusic() => StopBackgroundTrack();
+
+        public void StopWorkshopMusic() => StopBackgroundTrack();
 
         private void PlayBackgroundTrack(string resourcePath)
         {

@@ -33,6 +33,8 @@ namespace AeroTerra.Input
         public InputAction BoostAction { get; private set; }
         public InputAction BrakeAction { get; private set; }
         public InputAction SmokeScreenAction { get; private set; }
+        public InputAction ScreenshotAction { get; private set; }
+        public InputAction ReplayAction { get; private set; }
 
         /// <summary>Held-state helpers for the flight model (boost = sprint,
         /// brake = airbrake / hover-hold depending on airframe).</summary>
@@ -48,7 +50,7 @@ namespace AeroTerra.Input
             DontDestroyOnLoad(gameObject);
             BuildActions();
             ApplyScheme(GameManager.Instance != null
-                ? GameManager.Instance.Settings.Scheme : ControlScheme.KeyboardMouse);
+                ? GameManager.Instance.Settings.Scheme : ControlScheme.Keyboard);
         }
 
         private void BuildActions()
@@ -105,12 +107,20 @@ namespace AeroTerra.Input
             SmokeScreenAction = new InputAction("SmokeScreen", InputActionType.Button, "<Keyboard>/u");
             SmokeScreenAction.AddBinding("<Gamepad>/buttonSouth");
 
+            // Screenshot / Instant Replay: not part of any control scheme's flight
+            // model, always available regardless of scheme, same as Pause/Camera/Reset.
+            ScreenshotAction = new InputAction("Screenshot", InputActionType.Button, "<Keyboard>/f9");
+            ScreenshotAction.AddBinding("<Gamepad>/select");
+
+            ReplayAction = new InputAction("Replay", InputActionType.Button, "<Keyboard>/f10");
+            ReplayAction.AddBinding("<Gamepad>/dpad/up");
+
             foreach (var a in AllActions()) a.Enable();
             ApplySavedOverrides();
         }
 
         public InputAction[] AllActions() => new[]
-            { ThrottleAction, PitchAction, RollAction, YawAction, PauseAction, CameraAction, ResetAction, PayloadDropAction, BoostAction, BrakeAction, SmokeScreenAction };
+            { ThrottleAction, PitchAction, RollAction, YawAction, PauseAction, CameraAction, ResetAction, PayloadDropAction, BoostAction, BrakeAction, SmokeScreenAction, ScreenshotAction, ReplayAction };
 
         public void ApplyScheme(ControlScheme scheme)
         {
@@ -139,16 +149,6 @@ namespace AeroTerra.Input
 
             switch (scheme)
             {
-                case ControlScheme.KeyboardMouse:
-                    // Mouse adds fine attitude control on top of keys
-                    if (Mouse.current != null)
-                    {
-                        Vector2 d = Mouse.current.delta.ReadValue() * 0.02f;
-                        axes.Roll = Mathf.Clamp(axes.Roll + d.x, -1f, 1f);
-                        axes.Pitch = Mathf.Clamp(axes.Pitch + d.y, -1f, 1f);
-                    }
-                    break;
-
                 case ControlScheme.Gyroscope:
                     float sens = GameManager.Instance.Settings.GyroSensitivity;
 #if UNITY_ANDROID || UNITY_IOS

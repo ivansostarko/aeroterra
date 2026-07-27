@@ -6,7 +6,7 @@
 ## ion account & token
 1. Free account: https://ion.cesium.com
 2. **Access Tokens** tab (top of the ion website) → copy your **Default Token** (or *Create Token*). This is the API key the game needs.
-3. Asset Depot → add **Cesium World Terrain**, **Bing Maps Aerial**, **Cesium OSM Buildings** to *My Assets* (one click each — they're free).
+3. Asset Depot → add **Cesium World Terrain**, **Bing Maps Aerial**, **Cesium OSM Buildings**, and **Google Photorealistic 3D Tiles** to *My Assets* (one click each — they're free).
 
 ## Exactly where to paste the token in Unity
 
@@ -26,6 +26,7 @@ Asset IDs used by `MapManager`:
 | Cesium World Terrain | 1 | 3D terrain (Settings ▸ Map ▸ 3D Terrain) |
 | Bing Maps Aerial | 2 | Satellite style imagery |
 | Cesium OSM Buildings | 96188 | 3D buildings toggle |
+| Google Photorealistic 3D Tiles | 2275207 | Settings ▸ Map ▸ Photorealistic 3D Tiles (off by default) — a curated ion asset, streams with the same ion token as everything else above, **no separate Google API key needed**. Replaces (not layers with) the three rows above while it's on, since it already bakes in terrain/buildings/imagery. |
 
 ## Raster styles (Settings ▸ Map ▸ Style)
 `MapManager.StyleUrl()` maps styles to XYZ tile templates:

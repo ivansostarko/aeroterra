@@ -58,6 +58,11 @@ namespace AeroTerra.Drone
         /// after AddComponent, which runs Awake() synchronously before Spec is set).</summary>
         private IPowerSource _power;
 
+        /// <summary>Battery-only thrust-ceiling multiplier from the current air
+        /// temperature (Settings ▸ Flying Conditions), recomputed once per FixedUpdate —
+        /// see BatterySystem.PerformanceFactor. Always 1 for Fuel-powered airframes.</summary>
+        private float _batteryPerfFactor = 1f;
+
         private const float CrashSpeedThreshold = 8f; // m/s relative velocity to count as a hard crash, not a landing
         private const float CrashCooldownSec = 1.5f;
         private const float SeaLevelY = 0f;           // hard floor — altitude (world y) never goes negative
@@ -205,6 +210,9 @@ namespace AeroTerra.Drone
             float pitch = axes.Pitch * (GameManager.Instance.Settings.InvertPitch ? -1f : 1f);
             PitchInput = pitch; RollInput = axes.Roll; YawInput = axes.Yaw;
 
+            _batteryPerfFactor = Spec.PowerSystem == PowerSystemType.Battery
+                ? BatterySystem.PerformanceFactor(GameManager.Instance.Settings.TemperatureC) : 1f;
+
             if (FlightModel == FlightModelType.FixedWing)
                 TickFixedWing(axes, pitch);
             else
@@ -311,7 +319,7 @@ namespace AeroTerra.Drone
                 thrustDemandN -= wingLiftN;
             }
 
-            float thrustN = Mathf.Clamp(thrustDemandN, 0f, Spec.MaxThrustN * boost);
+            float thrustN = Mathf.Clamp(thrustDemandN, 0f, Spec.MaxThrustN * boost * _batteryPerfFactor);
             _rb.AddForce(transform.up * thrustN, ForceMode.Force);
             Throttle01 = Mathf.Clamp01(thrustN / Mathf.Max(1f, Spec.MaxThrustN));
 
@@ -339,7 +347,7 @@ namespace AeroTerra.Drone
             // ---- Engine: W/S trims a persistent power setting (idle keeps the prop
             // turning; a plane never zeroes its throttle mid-air by tapping S) ----
             Throttle01 = Mathf.Clamp(Throttle01 + axes.Throttle * dt * 0.5f, 0.12f, 1f);
-            float thrustN = Throttle01 * Spec.MaxThrustN * (Boosting ? BoostFactor : 1f) * CeilingFactor();
+            float thrustN = Throttle01 * Spec.MaxThrustN * (Boosting ? BoostFactor : 1f) * CeilingFactor() * _batteryPerfFactor;
             _rb.AddForce(transform.forward * thrustN, ForceMode.Force);
 
             Vector3 v = _rb.linearVelocity;
