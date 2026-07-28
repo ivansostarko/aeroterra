@@ -41,13 +41,26 @@ namespace AeroTerra.Drone
             _lastKnownDeployed = _flight.ParachuteDeployed;
 
             var im = AeroTerra.Input.InputManager.Instance;
-            if (im == null || _flight.ParachuteDeployed || _deploying) return;
+            if (im == null || _deploying) return;
             if (im.ParachuteAction == null || !im.ParachuteAction.WasPressedThisFrame()) return;
-            if (transform.position.y < DroneFlightController.ParachuteMinDeployAltitudeM) return;
+
+            // Everything from here on is a direct response to an actual G-key press, so
+            // every branch — success or refusal — gives the player an on-screen reason.
+            // Silently doing nothing (the old behavior) is what read as "broken."
+            if (_flight.ParachuteDeployed) return; // canopy's already visibly open, no message needed
+
+            if (transform.position.y < DroneFlightController.ParachuteMinDeployAltitudeM)
+            {
+                AeroTerra.UI.FlightHUD.Instance?.ShowFlightMessage(
+                    $"TOO LOW TO DEPLOY PARACHUTE — CLIMB ABOVE {DroneFlightController.ParachuteMinDeployAltitudeM:0} M",
+                    isWarning: true);
+                return;
+            }
 
             _flight.DeployParachute();
             _deploying = true;
             AeroTerra.Core.AudioManager.Instance?.PlayParachuteOpen(transform.position);
+            AeroTerra.UI.FlightHUD.Instance?.ShowFlightMessage("PARACHUTE DEPLOYED");
             StartCoroutine(DeployAnimation());
         }
 

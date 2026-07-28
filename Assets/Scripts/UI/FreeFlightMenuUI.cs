@@ -604,13 +604,22 @@ namespace AeroTerra.UI
             if (_previewingLocation != null) BuildMapPreviewOverlay();
         }
 
-        /// <summary>Static "where is this?" preview for one spawn location — a stylized
-        /// radar-style plot (map's own origin at center, this location marked at its
-        /// real flat-earth offset — MapDefinition.FlatOffsetMeters, same math the HUD
-        /// minimap/Landmarks already use) rather than a live map, since this screen has
-        /// no drone/Cesium world to show an actual 3D view of. Same staged-field +
-        /// rebuild modal pattern as MediaUI's image lightbox: backdrop click / ✕ / Esc
-        /// all close it via CloseMapPreview.</summary>
+        /// <summary>"Where is this?" preview for one spawn location. Starts as the
+        /// stylized radar-style plot (map's own origin at center, this location marked
+        /// at its real flat-earth offset — MapDefinition.FlatOffsetMeters, same math the
+        /// HUD minimap/Landmarks already use) — this screen has no drone/Cesium world to
+        /// show an actual 3D view of — and StartDarkMapTileLoad then fetches a real dark-
+        /// styled map tile (CARTO's keyless "dark_all" basemap) centered on the location
+        /// in the background. On success the synthetic grid/origin-dot/line are hidden
+        /// (their offset-from-origin projection doesn't share the real tile's scale or
+        /// alignment, so leaving them up would just misplace a dot over real imagery) and
+        /// the location marker is repositioned to its precise real coordinate within the
+        /// tile instead. On any failure (no internet, DNS, tile-provider issue) the
+        /// fetch silently no-ops and the synthetic plot stays exactly as it always has —
+        /// same "never assume a network/Resources.Load succeeds" convention this
+        /// codebase already uses everywhere else. Same staged-field + rebuild modal
+        /// pattern as MediaUI's image lightbox: backdrop click / ✕ / Esc all close it via
+        /// CloseMapPreview.</summary>
         private void BuildMapPreviewOverlay()
         {
             var loc = _previewingLocation;
@@ -628,8 +637,20 @@ namespace AeroTerra.UI
                   12, new Vector2(0.06f, 0.87f), new Vector2(0.94f, 0.905f), TextDim, TMPro.TextAlignmentOptions.Center);
 
             var plot = Panel_(box, "Plot", new Color(0.04f, 0.07f, 0.10f, 1f), new Vector2(0.08f, 0.30f), new Vector2(0.92f, 0.855f));
-            Panel_(plot, "GridH", new Color(1, 1, 1, 0.07f), new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0, -1), new Vector2(0, 1));
-            Panel_(plot, "GridV", new Color(1, 1, 1, 0.07f), new Vector2(0.5f, 0f), new Vector2(0.5f, 1f), new Vector2(-1, 0), new Vector2(1, 0));
+
+            // Real map tile — added first (renders behind the synthetic grid/dots below)
+            // and fully transparent/textureless until the fetch succeeds.
+            var mapImage = new GameObject("MapTile", typeof(RectTransform), typeof(RawImage));
+            mapImage.transform.SetParent(plot, false);
+            var mapRt = (RectTransform)mapImage.transform;
+            mapRt.anchorMin = Vector2.zero; mapRt.anchorMax = Vector2.one;
+            mapRt.offsetMin = Vector2.zero; mapRt.offsetMax = Vector2.zero;
+            var mapRawImage = mapImage.GetComponent<RawImage>();
+            mapRawImage.color = new Color(1f, 1f, 1f, 0f);
+            mapRawImage.raycastTarget = false;
+
+            var gridH = Panel_(plot, "GridH", new Color(1, 1, 1, 0.07f), new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0, -1), new Vector2(0, 1));
+            var gridV = Panel_(plot, "GridV", new Color(1, 1, 1, 0.07f), new Vector2(0.5f, 0f), new Vector2(0.5f, 1f), new Vector2(-1, 0), new Vector2(1, 0));
 
             Vector2 offsetM = MapDefinition.FlatOffsetMeters(loc.Latitude, loc.Longitude, _pickedMap.Latitude, _pickedMap.Longitude);
             float rangeM = Mathf.Max(600f, offsetM.magnitude * 1.4f);
@@ -638,12 +659,13 @@ namespace AeroTerra.UI
                 Mathf.Clamp(offsetM.y / rangeM, -0.42f, 0.42f));
             Vector2 markerAnchor = new Vector2(0.5f + frac.x, 0.5f + frac.y);
 
+            RectTransform lineRt = null;
             if (offsetM.sqrMagnitude > 0.01f)
             {
                 // Thin line from the map's origin to this location's marker.
                 var lineGo = new GameObject("Line", typeof(RectTransform), typeof(Image));
                 lineGo.transform.SetParent(plot, false);
-                var lineRt = (RectTransform)lineGo.transform;
+                lineRt = (RectTransform)lineGo.transform;
                 lineRt.anchorMin = new Vector2(0.5f, 0.5f); lineRt.anchorMax = new Vector2(0.5f, 0.5f);
                 lineRt.pivot = new Vector2(0f, 0.5f);
                 Vector2 plotPxSize = plot.rect.size;
@@ -653,8 +675,8 @@ namespace AeroTerra.UI
                 lineGo.GetComponent<Image>().color = new Color(AccentWarn.r, AccentWarn.g, AccentWarn.b, 0.5f);
             }
 
-            Panel_(plot, "OriginDot", Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-5, -5), new Vector2(5, 5));
-            Panel_(plot, "LocationDot", AccentWarn, markerAnchor, markerAnchor, new Vector2(-7, -7), new Vector2(7, 7));
+            var originDot = Panel_(plot, "OriginDot", Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-5, -5), new Vector2(5, 5));
+            var locationDot = Panel_(plot, "LocationDot", AccentWarn, markerAnchor, markerAnchor, new Vector2(-7, -7), new Vector2(7, 7));
 
             Label(box, $"●  {_pickedMap.DisplayName.ToUpperInvariant()}      ●  {loc.Name.ToUpperInvariant()}", 12,
                   new Vector2(0.06f, 0.24f), new Vector2(0.94f, 0.285f), TextDim, TMPro.TextAlignmentOptions.Center);
@@ -662,6 +684,8 @@ namespace AeroTerra.UI
                   TextDim, TMPro.TextAlignmentOptions.Center);
 
             Button_(box, "CLOSE", new Vector2(0.34f, 0.03f), new Vector2(0.66f, 0.10f), CloseMapPreview, PanelAlt, 16);
+
+            StartDarkMapTileLoad(mapRawImage, locationDot, gridH, gridV, lineRt, originDot, loc.Latitude, loc.Longitude);
         }
 
         private void BuildGeneralConditionsTab(RectTransform content, SettingsData s)
@@ -820,7 +844,94 @@ namespace AeroTerra.UI
         private void CloseMapPreview()
         {
             _previewingLocation = null;
+            _mapPreviewLoadToken++; // orphans any in-flight fetch for the closed preview
             RefreshConditionsScreen();
+        }
+
+        // ---------------------------------------------------------------
+        // Real dark-tiled map background for BuildMapPreviewOverlay — see its remarks.
+        // ---------------------------------------------------------------
+
+        private const int MapTileZoom = 15;
+        private static readonly Dictionary<string, Texture2D> _darkTileCache = new Dictionary<string, Texture2D>();
+        private int _mapPreviewLoadToken;
+
+        /// <summary>Kicks off (and tokens) the fetch — see the token check inside the
+        /// coroutine for why a closed/reopened preview can't have a stale fetch write
+        /// into the wrong (already-destroyed or since-replaced) UI elements.</summary>
+        private void StartDarkMapTileLoad(RawImage mapImage, RectTransform locationDot,
+            RectTransform gridH, RectTransform gridV, RectTransform line, RectTransform originDot,
+            double lat, double lon)
+        {
+            _mapPreviewLoadToken++;
+            StartCoroutine(LoadDarkMapTile(mapImage, locationDot, gridH, gridV, line, originDot,
+                lat, lon, _mapPreviewLoadToken));
+        }
+
+        private System.Collections.IEnumerator LoadDarkMapTile(RawImage mapImage, RectTransform locationDot,
+            RectTransform gridH, RectTransform gridV, RectTransform line, RectTransform originDot,
+            double lat, double lon, int token)
+        {
+            var (tileX, tileY, fracX, fracY) = LatLonToTileFraction(lat, lon, MapTileZoom);
+            // CARTO's "dark_all" basemap — freely embeddable without an API key (same
+            // tile scheme Leaflet's CartoDB.DarkMatter layer uses), a single fixed
+            // subdomain since this is one thumbnail fetch, not a scrolling map that
+            // needs request load spread across a/b/c/d.
+            string url = $"https://a.basemaps.cartocdn.com/dark_all/{MapTileZoom}/{tileX}/{tileY}.png";
+
+            Texture2D tex = null;
+            bool cached = _darkTileCache.TryGetValue(url, out tex) && tex != null;
+            if (!cached)
+            {
+                using (var req = UnityEngine.Networking.UnityWebRequestTexture.GetTexture(url))
+                {
+                    req.timeout = 6;
+                    yield return req.SendWebRequest();
+
+                    // The preview was closed (or reopened for a different location) while
+                    // this was in flight — everything it would write into may already be
+                    // destroyed. Silently drop the result.
+                    if (token != _mapPreviewLoadToken) yield break;
+                    if (req.result != UnityEngine.Networking.UnityWebRequest.Result.Success) yield break;
+
+                    tex = UnityEngine.Networking.DownloadHandlerTexture.GetContent(req);
+                    tex.wrapMode = TextureWrapMode.Clamp;
+                    _darkTileCache[url] = tex;
+                }
+            }
+
+            if (token != _mapPreviewLoadToken || mapImage == null) yield break;
+
+            mapImage.texture = tex;
+            mapImage.color = Color.white;
+
+            // The synthetic grid/origin-dot/line are a different projection/scale than
+            // the real tile — leaving them up would misplace a dot over real imagery,
+            // so they're hidden in favor of the location marker alone, repositioned to
+            // its precise real coordinate within the tile.
+            if (gridH != null) gridH.gameObject.SetActive(false);
+            if (gridV != null) gridV.gameObject.SetActive(false);
+            if (line != null) line.gameObject.SetActive(false);
+            if (originDot != null) originDot.gameObject.SetActive(false);
+            if (locationDot != null)
+            {
+                Vector2 anchor = new Vector2((float)fracX, 1f - (float)fracY); // tile Y grows downward, UI anchor Y grows upward
+                locationDot.anchorMin = anchor; locationDot.anchorMax = anchor;
+            }
+        }
+
+        /// <summary>Standard Web Mercator slippy-map tile math: which {z}/{x}/{y} tile
+        /// contains this lat/lon, plus the point's fractional position within that tile
+        /// (0..1 each axis) for placing a precise marker rather than assuming dead-center.</summary>
+        private static (int x, int y, double fracX, double fracY) LatLonToTileFraction(double lat, double lon, int zoom)
+        {
+            double latRad = lat * System.Math.PI / 180.0;
+            double n = System.Math.Pow(2.0, zoom);
+            double xTile = (lon + 180.0) / 360.0 * n;
+            double yTile = (1.0 - System.Math.Log(System.Math.Tan(latRad) + 1.0 / System.Math.Cos(latRad)) / System.Math.PI) / 2.0 * n;
+            int x = (int)System.Math.Floor(xTile);
+            int y = (int)System.Math.Floor(yTile);
+            return (x, y, xTile - x, yTile - y);
         }
 
         private static void BuildSpawnLocationRow(Transform content, int rowIndex, float rowH,

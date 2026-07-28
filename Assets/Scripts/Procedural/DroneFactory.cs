@@ -75,8 +75,29 @@ namespace AeroTerra.Procedural
             // Stock (non-customized) spawns preconfigure maxed out too, same as a fresh Workshop config.
             float payloadKg = custom != null ? custom.PayloadKg : spec.MaxPayloadKg;
 
+            // Stock Free Flight (no Workshop customization — custom == null, e.g. the
+            // default "no custom config" gallery entry every drone has) flies with the
+            // same manufacturer-default loadout a fresh Workshop config starts with
+            // (see WorkshopController.Show: SmokeScreenEquipped/ParachuteEquipped/
+            // HornEquipped all default true there) — not with every "Additional
+            // loadout" item silently missing. Without this, a stock spawn never gets a
+            // SmokeScreenController/ParachuteController/DroneHornController at all, so
+            // their in-flight key presses do nothing, with no way to tell why. A saved
+            // custom config that explicitly unequipped any of them to save weight is
+            // still honored exactly as built.
+            bool smokeEquipped = custom == null || custom.SmokeScreenEquipped;
+            bool parachuteEquipped = custom == null || custom.ParachuteEquipped;
+            bool hornEquipped = custom == null || custom.HornEquipped;
+
             if (flyable)
             {
+                // Wrap the mesh built so far under one "FlipVisual" transform BEFORE
+                // adding Rigidbody/collider or anything spawned after this point (smoke
+                // trail, parachute canopy) — those stay direct children of model itself,
+                // deliberately outside the wrap, so they don't cosmetically spin along
+                // with the B-key barrel-roll trick the way the actual airframe mesh does.
+                var flipVisual = WrapVisualForFlip(model);
+
                 var rb = model.AddComponent<Rigidbody>();
                 rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
                 var col = model.AddComponent<BoxCollider>();
@@ -84,13 +105,13 @@ namespace AeroTerra.Procedural
 
                 var flight = model.AddComponent<DroneFlightController>();
                 flight.Spec = spec;
-                flight.ExtraLoadoutMassKg = custom != null
-                    ? (custom.SmokeScreenEquipped ? LoadoutExtras.SmokeScreenKg : 0f)
-                      + LoadoutExtras.CommsWeightKg(custom.Comms)
-                      + (custom.ParachuteEquipped ? LoadoutExtras.ParachuteKg : 0f)
-                      + (custom.AiSensorEquipped ? LoadoutExtras.AiSensorKg : 0f)
-                    : 0f;
-                flight.HasParachute = custom != null && custom.ParachuteEquipped;
+                flight.FlipVisualRoot = flipVisual;
+                flight.ExtraLoadoutMassKg = (smokeEquipped ? LoadoutExtras.SmokeScreenKg : 0f)
+                      + (hornEquipped ? LoadoutExtras.HornKg : 0f)
+                      + (custom != null ? LoadoutExtras.CommsWeightKg(custom.Comms) : 0f)
+                      + (parachuteEquipped ? LoadoutExtras.ParachuteKg : 0f)
+                      + (custom != null && custom.AiSensorEquipped ? LoadoutExtras.AiSensorKg : 0f);
+                flight.HasParachute = parachuteEquipped;
                 flight.EffectivePayloadKind = custom != null && custom.HasSelectedPayloadKind
                     ? custom.SelectedPayloadKind : spec.PayloadKind;
 
@@ -123,13 +144,15 @@ namespace AeroTerra.Procedural
                 model.AddComponent<AudioSource>();
                 model.AddComponent<DroneAudioController>();
 
-                if (custom != null && custom.SmokeScreenEquipped)
+                if (smokeEquipped)
                 {
                     var smoke = BuildSmokeScreen(model.transform);
                     model.AddComponent<SmokeScreenController>().Configure(smoke);
                 }
 
-                if (custom != null && custom.ParachuteEquipped)
+                if (hornEquipped) model.AddComponent<DroneHornController>();
+
+                if (parachuteEquipped)
                 {
                     var canopy = BuildParachuteVisual(model.transform);
                     model.AddComponent<ParachuteController>().Configure(canopy, flight);
@@ -282,6 +305,36 @@ namespace AeroTerra.Procedural
             DroneModelKind.ImportedMesh => ImportedDroneBuilder.LastMeasuredWingspanM,
             _ => 0f,
         };
+
+        /// <summary>Re-parents every existing child of `model` (the whole procedural mesh
+        /// built by whichever *Builder.cs ran, whatever its own internal hierarchy looks
+        /// like) one level deeper, under a new empty "FlipVisual" transform — see
+        /// DroneFlightController.FlipVisualRoot/TickFlip. FlipVisual itself is added with
+        /// worldPositionStays: false so it starts at model's own local identity (position
+        /// zero, no rotation, scale 1), exactly coinciding with model's transform; each
+        /// child is then re-parented with worldPositionStays: true so nothing visually
+        /// shifts by so much as a pixel — this is purely inserting one extra transform
+        /// in the hierarchy, not moving anything. Everything else (GetComponentsInChildren
+        /// callers, FindDeep by name) keeps working unchanged since both search arbitrarily
+        /// deep, not just direct children. Must run before Rigidbody/collider are added
+        /// and before any later child (smoke trail, parachute canopy) is spawned — those
+        /// are added straight onto model.transform afterward, deliberately outside this
+        /// wrapper, so they don't cosmetically spin along with the mesh during a flip.</summary>
+        private static Transform WrapVisualForFlip(GameObject model)
+        {
+            var flipVisual = new GameObject("FlipVisual").transform;
+            flipVisual.SetParent(model.transform, false);
+
+            var existingChildren = new System.Collections.Generic.List<Transform>();
+            for (int i = 0; i < model.transform.childCount; i++)
+            {
+                var child = model.transform.GetChild(i);
+                if (child != flipVisual) existingChildren.Add(child);
+            }
+            foreach (var child in existingChildren) child.SetParent(flipVisual, worldPositionStays: true);
+
+            return flipVisual;
+        }
 
         /// <summary>Depth-first search for a named transform anywhere under root.</summary>
         public static Transform FindDeep(Transform root, string name)

@@ -177,6 +177,8 @@ namespace AeroTerra.UI
         private static string FriendlyName(string actionName) => actionName switch
         {
             "PayloadDrop" => "Payload Drop",
+            "PayloadSwitch" => "Payload Switch",
+            "Horn" => "Horn",
             "SmokeScreen" => "Smoke Screen",
             "PhotoMode" => "Photo Mode",
             "DroneFlip" => "Drone Flip",
@@ -191,7 +193,9 @@ namespace AeroTerra.UI
             "Roll" => "Bank left/right to strafe or turn.",
             "Camera" => "Cycle chase default → chase details → front → bottom → thermal.",
             "Reset" => "Teleport back to this flight's spawn point.",
-            "PayloadDrop" => "Release the next payload store.",
+            "PayloadDrop" => "Release the next payload store (AT-R4 Hornet with Warhead armed: self-destructs in place instead).",
+            "PayloadSwitch" => "Cycle the live payload category, on drones with more than one (currently AT-R4 Hornet only).",
+            "Horn" => "Sound the onboard warning horn, if equipped in the Workshop.",
             "Boost" => "Snap to full throttle for a very-fast burst.",
             "Brake" => "Cut all motor thrust and drop (fixed-wing: airbrake).",
             "SmokeScreen" => "Toggle the trailing smoke screen, if equipped in the Workshop.",

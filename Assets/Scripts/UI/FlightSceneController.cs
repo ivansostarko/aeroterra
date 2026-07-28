@@ -24,6 +24,7 @@ namespace AeroTerra.UI
         private InstantReplayController _replay;
         private FlightLogTracker _flightLog;
         private DroneCameraRig _camRig;
+        private GameConsoleUI _console;
 
         // Crash sequence — see OnDroneCrashed/ShowCrashCta/HideCrashCtaAndRespawn.
         private bool _crashCtaVisible;
@@ -92,6 +93,9 @@ namespace AeroTerra.UI
 
             _flightLog = gameObject.AddComponent<FlightLogTracker>();
             _flightLog.Init(_flightController);
+
+            _console = gameObject.AddComponent<GameConsoleUI>();
+            _console.Init(_canvas, _flightController);
         }
 
         /// <summary>Settings ▸ Game ▸ "Preview operator area" (default on): a procedural
@@ -119,7 +123,8 @@ namespace AeroTerra.UI
             }
             float radiusM = Mathf.Max(50f, rangeKm * 1000f);
 
-            DroneOperatorBuilder.BuildOperator(groundPos, heading);
+            var operatorGo = DroneOperatorBuilder.BuildOperator(groundPos, heading);
+            operatorGo.GetComponent<AeroTerra.Drone.DroneOperatorAnimator>().Target = _drone.transform;
             DroneOperatorBuilder.BuildBoundaryCircle(groundPos, radiusM);
         }
 
@@ -303,8 +308,17 @@ namespace AeroTerra.UI
             }, PanelAlt, 24);
             Button_(box, "RESTART", new Vector2(0.10f, 0.355f), new Vector2(0.90f, 0.47f), () =>
             {
-                TogglePause(); // unpauses, tears down this panel, restores the cursor
-                ResetDrone(); // teleports back to this flight's spawn lat/long/altitude
+                // A full level restart, not just a teleport — reloads the Flight scene
+                // from scratch (fresh weather, no leftover fire/craters/debris, replay
+                // buffer and flight log reset) and respawns at this flight's preselected
+                // map/drone/spawn point/spawn altitude, same as GameManager.StartFreeFlight
+                // originally launched it. Bypasses TogglePause() the same way MAIN MENU
+                // below does, since this scene instance is about to be torn down anyway.
+                Time.timeScale = 1f;
+                AudioListener.pause = false;
+                AudioManager.Instance?.StopPauseMenuMusic();
+                _flightLog?.Flush();
+                GameManager.Instance.RestartFlight();
             }, PanelAlt, 24);
             Button_(box, "MAIN MENU", new Vector2(0.10f, 0.215f), new Vector2(0.90f, 0.33f), () =>
             {

@@ -138,6 +138,8 @@ namespace AeroTerra.Drone
         {
             var im = AeroTerra.Input.InputManager.Instance;
             if (im != null && im.PayloadDropAction.WasPressedThisFrame()) TryDrop();
+            if (im != null && im.PayloadSwitchAction != null && im.PayloadSwitchAction.WasPressedThisFrame())
+                TrySwitchPayloadKind();
 
             if (_reloading)
             {
@@ -146,8 +148,55 @@ namespace AeroTerra.Drone
             }
         }
 
+        /// <summary>[J] — cycles DroneSpecification.AvailablePayloadKinds, the same
+        /// category picker WorkshopUI's LOADOUT tab already exposes for pre-flight
+        /// configuration (currently only AT-R4 Hornet has 2+ entries: DropAmmunition/
+        /// Warhead) — this just makes the same pick live-switchable mid-flight. No-ops
+        /// entirely for every drone with 0 or 1 available kinds (i.e. everyone else).
+        /// AT-R4 Hornet specifically: switching to Warhead redefines what [I] does (see
+        /// TryDrop) from "drop a warhead-shaped bomb" to "self-destruct in place" — every
+        /// other Warhead-classed drone (e.g. AT-U11 Bison, a fixed single-kind spec) is
+        /// unaffected, since this whole live-switch mechanism never applies to them.</summary>
+        private void TrySwitchPayloadKind()
+        {
+            if (_flight == null) return;
+            var available = _flight.Spec.AvailablePayloadKinds;
+            if (available == null || available.Length < 2) return;
+
+            int currentIndex = System.Array.IndexOf(available, _flight.EffectivePayloadKind);
+            _flight.EffectivePayloadKind = available[(currentIndex + 1 + available.Length) % available.Length];
+
+            // Re-skin the store models to the newly-armed kind's silhouette immediately
+            // — same per-store model swap Start() already does at spawn — so a live
+            // switch looks armed differently right away, not just behaviorally.
+            if (_flight.Spec.Id == "at-r4")
+            {
+                float visualScale = PayloadVisualScale(_flight.Spec, _originalPayloadKg);
+                foreach (var store in _stores)
+                {
+                    if (store == null) continue;
+                    PayloadModelBuilder.Rebuild(store, _flight.EffectivePayloadKind,
+                        _flight.Spec.DefaultBodyColor, _flight.Spec.DefaultAccentColor);
+                    store.localScale = Vector3.one * visualScale;
+                }
+            }
+
+            string label = DroneSpecification.PayloadKindLabel(_flight.EffectivePayloadKind).ToUpperInvariant();
+            AeroTerra.UI.FlightHUD.Instance?.ShowFlightMessage($"{label} ARMED");
+        }
+
         public void TryDrop()
         {
+            // AT-R4 Hornet only, and only while Warhead is the currently-armed live
+            // category (see TrySwitchPayloadKind): [I] becomes a voluntary self-destruct
+            // instead of a drop — bypasses the reload/store-count checks below entirely,
+            // since this doesn't consume a store at all, the whole airframe is the weapon.
+            if (_flight != null && _flight.Spec.Id == "at-r4" && _flight.EffectivePayloadKind == PayloadKind.Warhead)
+            {
+                _flight.DetonateAtCurrentPosition();
+                return;
+            }
+
             if (_reloading || _originalPayloadKg <= 0f || _payload.CurrentPayloadKg <= 0f) return;
             if (_stores.Count == 0 || _droppedCount >= _stores.Count) return;
 

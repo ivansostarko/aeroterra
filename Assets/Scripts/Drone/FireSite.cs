@@ -17,15 +17,21 @@ namespace AeroTerra.Drone
     /// site feeds it instead of spawning a new one — intensity (and with it flame
     /// scale, light, sound reach and updraft strength) grows, and the burn lifetime
     /// extends. Use RegisterHit(); never AddComponent directly.
+    ///
+    /// Every fire — even a single unfed hit — burns for at least BaseLifetimeSec
+    /// (5 minutes), long enough to still be burning well after the drone's moved on
+    /// in a normal flying session; stacking more hits on the same spot both grows the
+    /// blaze (flame/smoke scale, light, sound reach) and extends it further, up to
+    /// MaxLifetimeSec.
     /// </summary>
     public class FireSite : MonoBehaviour
     {
-        private const float MergeRadiusM = 6f;
-        private const int MaxIntensity = 5;
-        private const float BaseLifetimeSec = 45f;
-        private const float LifetimePerHitSec = 25f;
-        private const float MaxLifetimeSec = 150f;
-        private const float FadeDurationSec = 10f;
+        private const float MergeRadiusM = 8f;
+        private const int MaxIntensity = 10;
+        private const float BaseLifetimeSec = 300f;
+        private const float LifetimePerHitSec = 90f;
+        private const float MaxLifetimeSec = 900f;
+        private const float FadeDurationSec = 20f;
         private const float UpdraftHeightM = 28f;
         private const float UpdraftNewtonsPerIntensity = 12f;
 
@@ -91,19 +97,22 @@ namespace AeroTerra.Drone
         }
 
         /// <summary>Re-derives everything intensity-driven: flame/smoke scale, light
-        /// reach, audio loudness/reach and (via FixedUpdate) updraft.</summary>
+        /// reach, audio loudness/reach and (via FixedUpdate) updraft. The 1.8x baseline
+        /// (vs. the pack prefab's own authored size) is deliberate — even a single,
+        /// unstacked hit should read as a big, dramatic fire, not the stock-sized
+        /// prefab; each additional stacked hit grows it steeply from there.</summary>
         private void ApplyIntensity()
         {
             int extra = Intensity - 1;
-            _baseVfxScale = 1f + 0.35f * extra;
+            _baseVfxScale = 1.8f + 0.55f * extra;
             _vfxRoot.localScale = Vector3.one * _baseVfxScale;
 
-            _light.range = 10f + 3f * Intensity;
-            _baseLightIntensity = 2.5f + 1.3f * Intensity;
+            _light.range = 14f + 4f * Intensity;
+            _baseLightIntensity = 3.2f + 1.6f * Intensity;
 
-            _audio.minDistance = 5f + 2f * Intensity;
-            _audio.maxDistance = 40f + 15f * Intensity;
-            _baseVolume = Mathf.Min(1f, 0.45f + 0.11f * Intensity);
+            _audio.minDistance = 6f + 2.5f * Intensity;
+            _audio.maxDistance = 55f + 18f * Intensity;
+            _baseVolume = Mathf.Min(1f, 0.5f + 0.12f * Intensity);
         }
 
         private void Update()
@@ -127,7 +136,7 @@ namespace AeroTerra.Drone
                 // by the pack's particle systems instead of ones we built ourselves.
                 foreach (var ps in _vfxRoot.GetComponentsInChildren<ParticleSystem>())
                     ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
-                Destroy(gameObject, 8f);
+                Destroy(gameObject, 12f); // a bigger blaze's residual embers/smoke linger a little longer
             }
         }
 

@@ -13,8 +13,10 @@
 | Deploy Parachute — if equipped in the Workshop and above 100 m, cuts the motors and opens a canopy for a slow controlled descent (one-shot per flight, until Reset) | G | D-pad ← | — |
 | Camera (cycle chase default → chase details → front → bottom → thermal) | C | Y | On-screen button |
 | Photo mode (detached free-fly camera, press again to exit) | F8 | D-pad ↓ | On-screen button |
-| Drop payload (cargo pod / next munition) | I | X | On-screen button |
-| Toggle smoke screen (if equipped in the Workshop) | U | A / South | On-screen button |
+| Drop payload (cargo pod / next munition — AT-R4 Hornet with Warhead armed: self-destructs in place instead) | I | X | On-screen button |
+| Switch payload category — cycles a drone's live-selectable payload kind, currently only AT-R4 Hornet (Drop Ammunition ⇄ Warhead) | J | Left bumper | — |
+| Fire smoke screen — 60 s continuous burst, press again to cancel early (if equipped in the Workshop) | U | A / South | On-screen button |
+| Horn — sounds the onboard warning horn, enabled by default (if equipped in the Workshop) | H | D-pad → | On-screen button |
 | Reset drone — teleports back to this flight's spawn lat/long/altitude | R | B | On-screen button |
 | Pause | Esc | Start | On-screen button |
 | Screenshot | F9 | Select/View | On-screen button |
@@ -28,7 +30,7 @@ still yaw normally. Every keyboard binding above (both directions of each axis) 
 be rebound in Settings ▸ Controls ▸ Key Bindings, except Pause (fixed).
 
 ## Wind indicator, minimap & instant replay
-- The HUD's left column shows a **wind dial** below the compass — a needle pointing the direction the wind is currently blowing *toward* (windsock convention) plus its current speed in m/s (Settings ▸ Flying Conditions' WIND SPEED slider, whatever it's set to). The right column shows a **NAV minimap** — a north-up radar readout with a HOME marker (bearing + distance back to the map's spawn point) and, if the current map defines any (`MapDefinition.Landmarks`), small named **landmark markers** for nearby real-world points of interest — both clamped to the ring's edge once they're more than 400 m out, same off-scale-radar behavior.
+- A **wind dial** — a needle pointing the direction the wind is currently blowing *toward* (windsock convention) plus its current speed in m/s (Settings ▸ Flying Conditions' WIND SPEED slider, whatever it's set to) — sits tucked beside the battery/power gauge. The **NAV minimap** (top-right corner, same on all three HUD styles — military/civilian/cargo) is a north-up radar readout with an upright-square **OPERATOR marker** (bearing + distance back to the drone operator's actual ground position — the real spawn point, correctly offset if a Flying Conditions ▸ Spawn Location preset was picked, not just the map's own default origin) and, if the current map defines any (`MapDefinition.Landmarks`), small named diamond **landmark markers** for nearby real-world points of interest — both clamped to the ring's edge once they're more than 400 m out (labeled with the ring's own radius), same off-scale-radar behavior. A fixed "N" marks north at the top of the dial.
 - **Screenshot** saves a PNG to `Application.persistentDataPath/Screenshots/` with a timestamped filename, with a brief flash + on-screen confirmation.
 - **Instant Replay** freezes the live drone in place and flies a smoothed chase camera back along the last ~90 seconds of recorded flight, then resumes live control automatically (or press Replay again to cut it short). It's a rolling buffer, not a saved recording — nothing persists after you close the game.
 
@@ -121,7 +123,13 @@ Pressing the camera action cycles through five attached views, in this order: **
 - **AT-B5 Kestrel** carries four underwing munitions and releases **one per keypress**
   (outboard stations first); each store falls away with its own tumble-then-stabilize
   animation and vapor trail, and the HUD pips go dark one at a time.
-- **AT-R4 Hornet** drops its single oversized belly bomb.
+- **AT-R4 Hornet** drops its single oversized belly bomb while **Drop Ammunition** is
+  the live-armed category. Press **J** to switch to **Warhead** instead — the model
+  swaps to match immediately, and pressing **I** no longer drops anything: it
+  self-destructs the drone in place instead, with the same fire/explosion/audio
+  sequence a kamikaze impact uses, then respawns at the spawn point after the usual
+  delay (Free Flight has no permadeath). Press J again to switch back to a normal
+  drop before the drone actually blows up.
 - **AT-V8 Osprey** releases its strapped cargo pod — inert, civilian, dust-and-thud landing.
 - **AT-U11 Bison** carries two underwing munitions and releases one per keypress.
 - **AT-K2 Vespid / AT-L3 Locust / AT-J9 Wraith** have *nothing to drop*: the warhead is
@@ -135,10 +143,30 @@ cooldown silently restores it.
 
 ## Smoke screen
 Equipping "Smoke Screen" in the Workshop (Loadout tab) only makes the capability
-available for that flight — it doesn't trail automatically. Press the smoke-screen
-key in flight to switch it on, press again to switch it off; already-emitted smoke
-fades out naturally rather than cutting off instantly. Drones without it equipped
+available for that flight — it doesn't trail automatically, and (as of the stock
+manufacturer-default loadout) it's included on every drone unless a saved Workshop
+config explicitly unequipped it to save weight. Press the smoke-screen key in flight
+to fire a continuous 60-second burst — a HUD message confirms activation — which then
+stops emitting and dissipates on its own (already-emitted smoke fades out naturally
+rather than cutting off instantly); press the key again while it's active to cancel
+early instead of waiting out the full minute. Drones without it equipped ignore the
+key entirely.
+
+## Horn
+Equipping "Horn" in the Workshop (Loadout tab, right under Smoke Screen) adds a small
+warning-horn unit — enabled by default, both for a fresh Workshop config and for the
+stock manufacturer-default loadout (no Workshop customization at all), same as Smoke
+Screen. Press the horn key in flight for a one-shot honk — no toggle/hold state, each
+press is its own sound, same as a real vehicle horn. Drones without it equipped
 ignore the key entirely.
+
+## Dev console
+Press **`~`** (backtick/tilde) at any point in Free Flight to drop a command console
+over the HUD — type a command and press Enter to run it (`help` lists everything
+registered). It doesn't pause the game; it just disables the flight/camera/hotkey
+inputs above while it has typing focus, so command text doesn't also fly the drone or
+trigger a hotkey. Press `~` again, or Escape, to close it. See `docs/10-CHEATS.md` for
+the full command reference.
 
 ## Rebinding
 Settings ▸ Controls picks the scheme and shows the diagram above; its "MANAGE KEY

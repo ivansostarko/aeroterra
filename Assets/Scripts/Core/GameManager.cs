@@ -88,6 +88,25 @@ namespace AeroTerra.Core
             StartCoroutine(LoadSceneRoutine(SceneMainMenu, null, null, freeze: false));
         }
 
+        /// <summary>Pause menu ▸ RESTART: a full reload of the current flight, not just a
+        /// drone teleport (see FlightSceneController.ResetDrone for that lighter-weight
+        /// in-place path, still used by the R-key quick-reset and the post-crash prompt).
+        /// Reloading the Flight scene from scratch tears down and rebuilds every
+        /// subsystem — weather, fire/crater state, dropped payload debris, replay buffer,
+        /// flight log, camera, HUD — exactly like restarting a level in any other game,
+        /// instead of trying to hand-reset each one and risk missing something. Reuses
+        /// the same loading-screen routine/freeze beat StartFreeFlight uses; SelectedMap/
+        /// SelectedDrone/SelectedCustomConfig/SelectedSpawnLocationOverride/
+        /// SelectedSpawnAltitudeOverride are all still sitting on this DontDestroyOnLoad
+        /// singleton from when the flight was first launched, so the drone comes back at
+        /// exactly the same preselected map, drone, spawn point and spawn altitude with
+        /// nothing needing to be re-selected.</summary>
+        public void RestartFlight()
+        {
+            AudioManager.Instance?.StopWeatherAmbience();
+            StartCoroutine(LoadSceneRoutine(SceneFlight, SelectedMap?.DisplayName, SelectedMap?.Id, freeze: true));
+        }
+
         /// <summary>Free Flight only: how long the loading screen holds on "LOADING {map}"
         /// with the game world and audio frozen, giving the map/weather/engine-start moment
         /// a deliberate "mission start" beat instead of popping straight into a moving drone.</summary>

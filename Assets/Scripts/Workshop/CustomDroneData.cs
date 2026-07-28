@@ -22,6 +22,18 @@ namespace AeroTerra.Workshop
         public bool SmokeScreenEquipped;
         public AeroTerra.Drone.CommsType Comms = AeroTerra.Drone.CommsType.Radio;
 
+        /// <summary>Onboard warning horn — extra weight only (see LoadoutExtras.HornKg),
+        /// H key sounds it in flight (DroneHornController). No initializer needed:
+        /// WorkshopController.Show() explicitly sets this true for every freshly-opened
+        /// config (the default, enabled out of the box), while JsonUtility still
+        /// zero-inits it to false for any save written before this field existed — same
+        /// "explicit-default-in-Show(), implicit-false-on-old-saves" pattern
+        /// SmokeScreenEquipped/ParachuteEquipped already established. DroneFactory.Spawn
+        /// also treats a null custom config (stock Free Flight, no Workshop
+        /// customization) as this being true, same "manufacturer default loadout"
+        /// precedent those two use.</summary>
+        public bool HornEquipped;
+
         /// <summary>Recovery parachute — extra weight only (see LoadoutExtras.ParachuteKg),
         /// no deploy-on-crash behavior yet. No initializer needed: WorkshopController.Show()
         /// explicitly sets this true for every freshly-opened config (the new default), while

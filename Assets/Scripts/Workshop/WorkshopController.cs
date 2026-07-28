@@ -93,6 +93,7 @@ namespace AeroTerra.Workshop
                 PayloadKg = spec.MaxPayloadKg,
                 SkinId = "stock",
                 SmokeScreenEquipped = true,
+                HornEquipped = true,
                 Comms = Drone.CommsType.Radio,
                 ParachuteEquipped = true,
                 AiSensorEquipped = false,
@@ -158,6 +159,7 @@ namespace AeroTerra.Workshop
             ApplyPayloadVisual();
         }
         public void SetSmokeScreen(bool equipped) => Working.SmokeScreenEquipped = equipped;
+        public void SetHorn(bool equipped) => Working.HornEquipped = equipped;
         public void SetComms(Drone.CommsType comms) => Working.Comms = comms;
         public void SetParachute(bool equipped) => Working.ParachuteEquipped = equipped;
         public void SetAiSensor(bool equipped) => Working.AiSensorEquipped = equipped;

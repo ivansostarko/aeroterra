@@ -38,6 +38,15 @@ namespace AeroTerra.Input
         public InputAction PhotoModeAction { get; private set; }
         public InputAction DroneFlipAction { get; private set; }
         public InputAction ParachuteAction { get; private set; }
+        public InputAction PayloadSwitchAction { get; private set; }
+        public InputAction HornAction { get; private set; }
+
+        /// <summary>Toggles GameConsoleUI's dev/cheat console (backtick/tilde) — kept
+        /// deliberately OUT of AllActions()/the Controls rebinding UI: it must stay
+        /// enabled even while SetGameplayInputEnabled(false) has disabled every actual
+        /// gameplay action for typing focus, so tilde (or the console itself) can still
+        /// close it, and it isn't meant to be a player-rebindable control.</summary>
+        public InputAction ConsoleToggleAction { get; private set; }
 
         /// <summary>Held-state helpers for the flight model (boost = sprint,
         /// brake = airbrake / hover-hold depending on airframe).</summary>
@@ -142,12 +151,48 @@ namespace AeroTerra.Input
             ParachuteAction = new InputAction("Parachute", InputActionType.Button, "<Keyboard>/g");
             ParachuteAction.AddBinding("<Gamepad>/dpad/left");
 
+            // Payload switch: momentary press, cycles a drone's live-selectable payload
+            // category (DroneSpecification.AvailablePayloadKinds — currently only AT-R4
+            // Hornet has 2+ entries; every other drone's AllActions() listener for this
+            // just no-ops, see PayloadDropper.TrySwitchPayloadKind). Left shoulder is the
+            // one gamepad button not already claimed (triggers are Boost/Brake, face
+            // buttons are Camera/Reset/PayloadDrop/SmokeScreen, right shoulder is Flip).
+            PayloadSwitchAction = new InputAction("PayloadSwitch", InputActionType.Button, "<Keyboard>/j");
+            PayloadSwitchAction.AddBinding("<Gamepad>/leftShoulder");
+
+            // Horn: momentary press, sounds the Workshop loadout item's warning horn
+            // (equipping it just makes the capability available — see
+            // DroneHornController). Gamepad dpad/right is the last dpad face not
+            // already claimed (up=Replay, down=PhotoMode, left=Parachute).
+            HornAction = new InputAction("Horn", InputActionType.Button, "<Keyboard>/h");
+            HornAction.AddBinding("<Gamepad>/dpad/right");
+
+            // Dev/cheat console: backtick/tilde, no gamepad binding (a text-entry tool
+            // has nothing sensible to bind on a pad). Enabled unconditionally below,
+            // outside the AllActions() loop it deliberately isn't part of.
+            ConsoleToggleAction = new InputAction("ConsoleToggle", InputActionType.Button, "<Keyboard>/backquote");
+
             foreach (var a in AllActions()) a.Enable();
+            ConsoleToggleAction.Enable();
             ApplySavedOverrides();
         }
 
         public InputAction[] AllActions() => new[]
-            { ThrottleAction, PitchAction, RollAction, YawAction, PauseAction, CameraAction, ResetAction, PayloadDropAction, BoostAction, BrakeAction, SmokeScreenAction, ScreenshotAction, ReplayAction, PhotoModeAction, DroneFlipAction, ParachuteAction };
+            { ThrottleAction, PitchAction, RollAction, YawAction, PauseAction, CameraAction, ResetAction, PayloadDropAction, BoostAction, BrakeAction, SmokeScreenAction, ScreenshotAction, ReplayAction, PhotoModeAction, DroneFlipAction, ParachuteAction, PayloadSwitchAction, HornAction };
+
+        /// <summary>Enables/disables every actual gameplay action at once (everything
+        /// AllActions() returns) — GameConsoleUI calls this with false while its input
+        /// field has typing focus, so hotkey letters/keys typed as command text (e.g.
+        /// the 'g'/'u'/'b'/'r'/'i'/'c' in "speed 500") don't also fire Parachute/Smoke/
+        /// DroneFlip/Reset/PayloadDrop/Camera etc. while the player is just typing.
+        /// ConsoleToggleAction itself is never touched here — see its own remarks.</summary>
+        public void SetGameplayInputEnabled(bool enabled)
+        {
+            foreach (var a in AllActions())
+            {
+                if (enabled) a.Enable(); else a.Disable();
+            }
+        }
 
         public void ApplyScheme(ControlScheme scheme)
         {

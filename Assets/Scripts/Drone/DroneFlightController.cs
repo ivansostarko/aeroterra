@@ -60,6 +60,16 @@ namespace AeroTerra.Drone
         /// directly).</summary>
         [HideInInspector] public bool HasParachute;
 
+        /// <summary>Set once by DroneFactory.Spawn (WrapVisualForFlip) — every rendered
+        /// mesh part, parented one level under this instead of directly under the
+        /// airframe's own transform. TickFlip spins only this transform for the B-key
+        /// barrel-roll trick, so the actual Rigidbody/collider — the same transform the
+        /// chase camera tracks as its Target — never rotates during the trick at all;
+        /// the camera holds steady while just the model performs the flip. Null (with a
+        /// direct-rigidbody-rotation fallback in TickFlip) only if a caller ever spawns a
+        /// flyable drone through some other path that skips DroneFactory.Spawn.</summary>
+        [HideInInspector] public Transform FlipVisualRoot;
+
         /// <summary>Resolved once by DroneFactory.Spawn — CustomDroneData.
         /// SelectedPayloadKind if the player picked one from Spec.AvailablePayloadKinds'
         /// category picker (currently only possible on AT-R4 Hornet), else just
@@ -67,6 +77,24 @@ namespace AeroTerra.Drone
         /// Spec.PayloadKind directly so a drone with no picker (the other eleven) behaves
         /// identically to before this field existed.</summary>
         [HideInInspector] public PayloadKind EffectivePayloadKind;
+
+        /// <summary>Dev console "speed" cheat (see GameConsoleUI/docs/10-CHEATS.md) — null
+        /// means no cheat is active, use Spec.MaxSpeedKmh unchanged (see
+        /// EffectiveMaxSpeedKmh). Deliberately NOT cleared by OnRespawn — a cheat typed
+        /// into the console should stick through an R-key reset or a crash respawn within
+        /// the same flight, same as any other dev-console override would; only leaving
+        /// the flight (a real scene reload) clears it.</summary>
+        public float? MaxSpeedOverrideKmh;
+
+        /// <summary>What TickMultirotor/TickFixedWing's speed clamp actually enforces —
+        /// Spec.MaxSpeedKmh unless the console's "speed" cheat has overridden it.</summary>
+        public float EffectiveMaxSpeedKmh => MaxSpeedOverrideKmh ?? Spec.MaxSpeedKmh;
+
+        /// <summary>Sets the "speed" cheat's max-speed override — floor-clamped to 0 (a
+        /// negative or zero cap is a valid, if extreme, thing to type; the clamp just
+        /// keeps it non-negative rather than rejecting it outright). Called by
+        /// GameConsoleUI's "speed &lt;km/h&gt;" command.</summary>
+        public void SetMaxSpeedOverride(float kmh) => MaxSpeedOverrideKmh = Mathf.Max(0f, kmh);
 
         private Rigidbody _rb;
         private AeroTerra.Input.InputManager _input;
@@ -105,6 +133,14 @@ namespace AeroTerra.Drone
         private bool _crashRespawnPending;
         private bool _isFlipping;
         private float _flipTimer;
+
+        // Power-failure fall: once the active power source (battery or fuel) hits
+        // empty, control authority is gone and the airframe tumbles down out of
+        // control until it hits something — see BeginPowerFailureFall/TickPowerFailureFall.
+        private const float PowerFailureSpinRampSec = 1.5f; // time to reach full tumble rate
+        private bool _powerFailureActive;
+        private float _powerFailureTimer;
+        private float _fallSpinSign; // randomized per failure so every fall tumbles a different way
 
         /// <summary>Fired on a gentle touchdown (below CrashSpeedThreshold — i.e. NOT a
         /// hard crash), cooldown-gated same as the crash path. Used by FlightLogTracker
@@ -231,13 +267,20 @@ namespace AeroTerra.Drone
             _headingDeg = transform.eulerAngles.y;
             JustCrashedFromDeadBattery = false;
             ParachuteDeployed = false;
+            _powerFailureActive = false;
+            _powerFailureTimer = 0f;
+            // A respawn mid-flip would otherwise leave the mesh rotated away from the
+            // freshly teleported (and always upright) Rigidbody/collider/camera Target —
+            // visually broken in a way the old whole-body rotation never was as obviously.
+            _isFlipping = false;
+            if (FlipVisualRoot != null) FlipVisualRoot.localRotation = Quaternion.identity;
             // A reset teleports the airframe — wipe any world-space trails so they
             // don't draw a kilometer-long ribbon from the old position to the new.
             foreach (var trail in GetComponentsInChildren<TrailRenderer>()) trail.Clear();
             if (FlightModel == FlightModelType.FixedWing)
             {
                 Throttle01 = 0.65f;
-                if (_rb != null) _rb.linearVelocity = transform.forward * (Spec.MaxSpeedKmh / 3.6f * 0.55f);
+                if (_rb != null) _rb.linearVelocity = transform.forward * (EffectiveMaxSpeedKmh / 3.6f * 0.55f);
             }
             else
             {
@@ -267,6 +310,16 @@ namespace AeroTerra.Drone
                 // dead battery/fuel: gravity wins, keep light drag
                 PitchInput = RollInput = YawInput = 0f;
                 Boosting = Braking = false;
+
+                // Under an already-open canopy, a dead battery/tank doesn't change
+                // anything — it's already a powerless, controlled descent, so it
+                // should keep hanging level rather than start tumbling.
+                if (_power != null && _power.IsEmpty && !IsDetonated && !ParachuteDeployed)
+                {
+                    if (!_powerFailureActive) BeginPowerFailureFall();
+                    TickPowerFailureFall(Time.fixedDeltaTime);
+                }
+
                 EnforceAltitudeFloor();
                 return;
             }
@@ -306,7 +359,14 @@ namespace AeroTerra.Drone
                 if (_isFlipping)
                 {
                     _flipTimer += Time.fixedDeltaTime;
-                    if (_flipTimer >= FlipDurationSec) _isFlipping = false;
+                    if (_flipTimer >= FlipDurationSec)
+                    {
+                        _isFlipping = false;
+                        // Hard-snap to identity rather than trusting 60 accumulated
+                        // Quaternion multiplications to land exactly back on zero —
+                        // a clean finish, no residual floating-point tilt on the mesh.
+                        if (FlipVisualRoot != null) FlipVisualRoot.localRotation = Quaternion.identity;
+                    }
                     else TickFlip(Time.fixedDeltaTime);
                 }
                 if (!_isFlipping)
@@ -327,7 +387,7 @@ namespace AeroTerra.Drone
             // TickParachuteDescent already converges to its own much slower target speed.
             if (!ParachuteDeployed)
             {
-                float maxMs = Spec.MaxSpeedKmh / 3.6f * (Boosting ? BoostFactor : 1f);
+                float maxMs = EffectiveMaxSpeedKmh / 3.6f * (Boosting ? BoostFactor : 1f);
                 if (_rb.linearVelocity.magnitude > maxMs)
                     _rb.linearVelocity = _rb.linearVelocity.normalized * maxMs;
             }
@@ -366,17 +426,87 @@ namespace AeroTerra.Drone
         }
 
         // ------------------------------------------------------------------
-        // Drone Flip: scripted trick, bypasses the normal attitude controller for
-        // FlipDurationSec so the imparted spin isn't immediately fought and cancelled
-        // — every flight model shares this, then falls back into its own Tick* method
-        // (which self-levels from whatever attitude the flip left it in) once it ends.
+        // Power-failure fall: dead battery/fuel with no canopy out — the airframe
+        // has no active control authority left and tumbles down until impact (see
+        // OnCollisionEnter, which already gives any hard-enough landing the full
+        // fire/smoke/explosion treatment regardless of why the drone went down).
+        // ------------------------------------------------------------------
+
+        /// <summary>Called once on the exact FixedUpdate the power source is first
+        /// found empty — picks a random tumble direction so no two falls play out
+        /// identically, and starts winding the rotors down (see TickPowerFailureFall).</summary>
+        private void BeginPowerFailureFall()
+        {
+            _powerFailureActive = true;
+            _powerFailureTimer = 0f;
+            _fallSpinSign = Random.value < 0.5f ? -1f : 1f;
+            AeroTerra.Core.AudioManager.Instance?.PlayPowerFailureAlarm(transform.position);
+        }
+
+        /// <summary>Drives the actual tumble every FixedUpdate while falling powerless.
+        /// Directly setting angularVelocity (rather than adding torque) is a deliberate
+        /// scripted-motion choice, same technique TickFlip/TickParachuteDescent already
+        /// use above, so the fall reads as a designed "loss of control" spiral instead of
+        /// whatever leftover spin AngularDrag happens to leave it with. Winged airframes
+        /// get a classic nose-down-then-spin departure stall; rotor airframes tumble end
+        /// over end on a wandering combination of all three axes, since dead rotors give
+        /// no gyroscopic stability at all. Either way the spin ramps up over
+        /// PowerFailureSpinRampSec rather than snapping straight to full rate, and
+        /// residual horizontal drift bleeds off so it plummets instead of gliding.</summary>
+        private void TickPowerFailureFall(float dt)
+        {
+            _powerFailureTimer += dt;
+            float rampUp = Mathf.Clamp01(_powerFailureTimer / PowerFailureSpinRampSec);
+
+            Vector3 spinDegPerSec;
+            if (FlightModel == FlightModelType.FixedWing)
+            {
+                float yawRate = _fallSpinSign * Mathf.Lerp(15f, 140f, rampUp);
+                float rollRate = _fallSpinSign * Mathf.Lerp(20f, 160f, rampUp);
+                float pitchRate = Mathf.Lerp(35f, 5f, rampUp); // nose drops hard first, then the spin takes over
+                spinDegPerSec = new Vector3(pitchRate, yawRate, rollRate);
+            }
+            else
+            {
+                float yawRate = _fallSpinSign * Mathf.Lerp(20f, 200f, rampUp);
+                float rollRate = _fallSpinSign * Mathf.Lerp(10f, 90f, rampUp) * Mathf.Sin(_powerFailureTimer * 2.6f);
+                float pitchRate = Mathf.Lerp(0f, 70f, rampUp) * Mathf.Sin(_powerFailureTimer * 2.1f + 1f);
+                spinDegPerSec = new Vector3(pitchRate, yawRate, rollRate);
+            }
+            _rb.angularVelocity = spinDegPerSec * Mathf.Deg2Rad;
+
+            Vector3 horizontal = new Vector3(_rb.linearVelocity.x, 0f, _rb.linearVelocity.z);
+            _rb.AddForce(-horizontal * 0.5f, ForceMode.Acceleration);
+
+            // RotorSpinner reads Throttle01 for spin speed (floored at 15% so dead
+            // rotors windmill/autorotate rather than snapping to a dead stop) — winding
+            // it down here, instead of leaving it frozen at whatever it was the instant
+            // power died, is what makes the rotors visibly spin down during the fall.
+            Throttle01 = Mathf.MoveTowards(Throttle01, 0f, dt * 0.6f);
+        }
+
+        // ------------------------------------------------------------------
+        // Drone Flip: a cosmetic-only trick — FlipVisualRoot (every rendered mesh
+        // part, see DroneFactory.WrapVisualForFlip) spins a full 360°, while the
+        // Rigidbody itself — and so the chase camera, which tracks this same
+        // transform — never rotates and holds its normal attitude throughout. Bypasses
+        // the normal attitude controller for FlipDurationSec purely so stick input
+        // doesn't fight PitchInput/RollInput/YawInput while the trick plays; every
+        // flight model falls back into its own Tick* method once it ends, unaffected
+        // since the actual attitude never changed.
         // ------------------------------------------------------------------
         private void TickFlip(float dt)
         {
             float rateDeg = 360f / FlipDurationSec;
-            _rb.MoveRotation(_rb.rotation * Quaternion.Euler(rateDeg * dt, 0, 0));
-            // Roughly hover-equivalent thrust so the trick doesn't just free-fall —
-            // reads as an assisted flip, not a loss of control.
+            if (FlipVisualRoot != null)
+                FlipVisualRoot.localRotation *= Quaternion.Euler(rateDeg * dt, 0f, 0f);
+            else
+                _rb.MoveRotation(_rb.rotation * Quaternion.Euler(rateDeg * dt, 0, 0)); // legacy fallback, no visual root wired
+
+            // Roughly hover-equivalent thrust so the trick doesn't sink while it
+            // plays — the trick no longer touches the real attitude at all, so this
+            // is purely "hold altitude for the ~0.65s stunt," not counteracting any
+            // actual loss of lift from tumbling.
             float hoverN = _rb.mass * Physics.gravity.magnitude;
             _rb.AddForce(transform.up * Mathf.Min(hoverN, Spec.MaxThrustN * _batteryPerfFactor), ForceMode.Force);
             PitchInput = 1f; RollInput = 0f; YawInput = 0f;
@@ -466,7 +596,11 @@ namespace AeroTerra.Drone
                 // Quad-plane: the wing progressively carries the weight as forward
                 // airspeed builds (fully at ~60% max speed), so the lift rotors wind
                 // down in cruise exactly like a real VTOL hybrid transitioning.
-                float cruiseMs = Spec.MaxSpeedKmh / 3.6f * 0.6f;
+                // Floored well above zero: the "speed" console cheat can legally drive
+                // EffectiveMaxSpeedKmh down to 0, and cruiseMs gets squared as a divisor
+                // just below — an unfloored 0 there would divide by zero into NaN/Infinity
+                // and break this airframe's physics outright, not just "cap its speed."
+                float cruiseMs = Mathf.Max(0.5f, EffectiveMaxSpeedKmh / 3.6f * 0.6f);
                 float fwd = Mathf.Max(0f, Vector3.Dot(_rb.linearVelocity, transform.forward));
                 float wingLiftN = Mathf.Min(_rb.mass * g, _rb.mass * g * (fwd * fwd) / (cruiseMs * cruiseMs))
                                 * CeilingFactor();
@@ -498,8 +632,11 @@ namespace AeroTerra.Drone
         {
             float dt = Time.fixedDeltaTime;
             float g = Physics.gravity.magnitude;
-            float maxMs = Spec.MaxSpeedKmh / 3.6f;
-            float cruiseMs = maxMs * 0.5f;
+            float maxMs = EffectiveMaxSpeedKmh / 3.6f;
+            // Same zero-divisor guard as TickMultirotor's VtolHybrid branch above —
+            // cruiseMs gets squared as a divisor below (liftN), and the "speed" console
+            // cheat can legally set EffectiveMaxSpeedKmh (and so maxMs) to exactly 0.
+            float cruiseMs = Mathf.Max(0.5f, maxMs * 0.5f);
             float stallMs = maxMs * 0.26f;
 
             // ---- Engine: W/S trims a persistent power setting (idle keeps the prop
@@ -677,6 +814,18 @@ namespace AeroTerra.Drone
             _rb.isKinematic = true;
 
             StartCoroutine(RespawnAfterDetonation());
+        }
+
+        /// <summary>Voluntary self-destruct at the drone's own current position — same
+        /// full detonation sequence (FireSite/ExplosionEffect fire+blast, audio, hidden
+        /// wreck, respawn after KamikazeRespawnDelaySec) as a real kamikaze impact, just
+        /// triggered on demand instead of by a collision. Used by PayloadDropper for
+        /// AT-R4 Hornet's live "Warhead" payload mode (press [I] with Warhead armed —
+        /// see PayloadDropper.TryDrop) rather than dropping a separate munition.</summary>
+        public void DetonateAtCurrentPosition()
+        {
+            if (IsDetonated) return;
+            Detonate(transform.position);
         }
 
         private IEnumerator RespawnAfterDetonation()

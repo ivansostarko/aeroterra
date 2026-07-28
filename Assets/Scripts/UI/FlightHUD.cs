@@ -7,27 +7,54 @@ using static AeroTerra.UI.UIBuilder;
 namespace AeroTerra.UI
 {
     /// <summary>
-    /// In-flight HUD: a top status strip (drone name, active camera mode, payload
-    /// status), a camera-mode-aware center reticle, a lightweight attitude cue, the
-    /// bottom telemetry bar (speed/altitude/throttle/heading/battery/GPS/vertical
-    /// speed), a payload-drop key hint, a low-battery warning banner, a wind-direction
-    /// dial, and a north-up radar minimap showing bearing/distance back to the map's
-    /// spawn origin.
+    /// In-flight HUD. Three distinct visual/layout skins are built off
+    /// DroneSpecification.Category — the same field that already drives the
+    /// Workshop showroom badge — so the HUD reads as "belonging" to the aircraft
+    /// flying it instead of one generic instrument cluster for every drone:
+    ///   - Military:  green phosphor jet-HUD look — pitch-ladder artificial
+    ///                horizon, permanent bracket/cross boresight reticle, and
+    ///                scrolling vertical speed/altitude tapes either side of center.
+    ///   - Civilian:  DJI/Betaflight-style FPV goggle OSD — flat monospace-ish
+    ///                readouts with no background chrome, plain numeric speed/alt,
+    ///                a thin center crosshair, nothing else drawn over the view.
+    ///   - CargoLogistics: amber industrial/logistics look — bordered readout
+    ///                panels plus vertical bar-gauges for altitude and payload
+    ///                load, since ceiling and cargo weight are what a logistics
+    ///                pilot actually watches.
+    /// All three share the same telemetry math (Update()) and the same secondary
+    /// instruments (heading tape, wind/temp, NAV minimap, payload pips, low-power
+    /// warning) — only their color, position, and a handful of style-only widgets
+    /// (ladder/tapes/gauges) differ. Every element toggle in Settings ▸ Game still
+    /// works uniformly across all three skins.
     /// </summary>
     public class FlightHUD : MonoBehaviour
     {
         public static FlightHUD Instance { get; private set; }
 
+        // Style theme colors — chrome only; ordnance-type tinting (payload pips,
+        // military/civilian payload fill) is a separate semantic and untouched.
+        private static readonly Color MilPrimary = new Color(0.35f, 0.95f, 0.55f, 1f);
+        private static readonly Color MilDim = new Color(0.35f, 0.95f, 0.55f, 0.55f);
+        private static readonly Color MilWarn = new Color(0.95f, 0.25f, 0.22f, 1f);
+        private static readonly Color CivPrimary = new Color(0.95f, 0.97f, 1f, 1f);
+        private static readonly Color CivDim = new Color(0.95f, 0.97f, 1f, 0.6f);
+        private static readonly Color CargoPrimary = new Color(1f, 0.72f, 0.2f, 1f);
+        private static readonly Color CargoDim = new Color(1f, 0.72f, 0.2f, 0.6f);
+        private static readonly Color CargoWarn = new Color(0.95f, 0.28f, 0.2f, 1f);
+
         private DroneFlightController _flight;
         private RectTransform _root;
-        private TMPro.TextMeshProUGUI _speed, _alt, _throttle, _battery, _heading, _vspeed, _lat, _lon, _warning;
+        private DroneCategory _style;
+        private Color _primary, _dim, _warnColor;
+
+        private TMPro.TextMeshProUGUI _speed, _alt, _throttle, _battery, _vspeed, _lat, _lon, _warning;
         private TMPro.TextMeshProUGUI _camModeLabel, _payloadLabel, _dropHint, _fpsLabel;
         private RectTransform _batteryFill;
         private RectTransform _powerIconHolder;
         private RectTransform _payloadPipsRow;
         private RectTransform _reticleCross, _reticleV;
         private RectTransform[] _reticleCorners;
-        private RectTransform _horizonLine;
+        private RectTransform _horizonLine; // Civilian / Cargo simple attitude cue
 
         private int _hardpoints;
         private bool _militaryPayload;
@@ -35,20 +62,45 @@ namespace AeroTerra.UI
         private UnityEngine.UI.Image[] _payloadPips;
         private PayloadDropper _dropper;
 
-        private RectTransform _compassRing;
-        private RectTransform[] _compassLabels;
+        // Transient flight-event callout (e.g. "PARACHUTE DEPLOYED") — see
+        // ShowFlightMessage. Separate from _warning, which is a persistent
+        // power-state banner recomputed every frame, not a one-off event ping.
+        private const float FlightMessageDurationSec = 2.6f;
+        private const float FlightMessageFadeSec = 0.6f;
+        private TMPro.TextMeshProUGUI _flightMessageLabel;
+        private float _flightMessageTimer;
 
+        // Heading tape (top ribbon) — replaces the old radial compass dial.
+        private RectTransform _headingWidget, _headingRibbon;
+        private TMPro.TextMeshProUGUI[] _headingTickLabels;
+        private float[] _headingTickDegrees;
+        private TMPro.TextMeshProUGUI _headingCenterLabel;
+
+        // Wind / temperature — compact readouts tucked beside the power gauge.
         private RectTransform _windDial, _windNeedle;
         private TMPro.TextMeshProUGUI _windSpeedLabel;
-
         private RectTransform _tempPanel;
         private TMPro.TextMeshProUGUI _tempLabel;
 
+        // Military-only: artificial-horizon pitch ladder.
+        private RectTransform _ladder;
+
+        // Military-only: scrolling vertical speed/altitude tapes.
+        private RectTransform _speedTapeArea, _altTapeArea;
+        private TMPro.TextMeshProUGUI[] _speedTickLabels, _altTickLabels;
+        private TMPro.TextMeshProUGUI _speedCenterLabel, _altCenterLabel;
+
+        // Cargo-only: vertical bar-gauges for altitude ceiling and payload load.
+        private RectTransform _altGaugeArea, _altGaugeFill;
+        private RectTransform _payloadGaugeArea, _payloadGaugeFill;
+
         private RectTransform _minimapFrame;
-        private RectTransform _minimapHome, _minimapNose;
-        private TMPro.TextMeshProUGUI _minimapDistLabel;
+        private RectTransform _minimapOperator, _minimapNose;
+        private TMPro.TextMeshProUGUI _minimapOperatorLabel;
+        private Vector3 _minimapOperatorGroundPos; // GameManager.SpawnLocalPosition, cached once — same X/Z the operator prop actually stands at
+        private bool _minimapOperatorPosCached;
         private const float MinimapRangeM = 400f;
-        private const float MinimapRadiusPx = 58f;
+        private const float MinimapRadiusPx = 64f;
 
         // Landmark bearing markers (MapDefinition.Landmarks) — offsets computed once at
         // Init (landmarks/map don't change mid-flight), positions re-derived every frame
@@ -66,21 +118,52 @@ namespace AeroTerra.UI
         {
             Instance = this;
             _flight = flight;
+            _style = flight.Spec.Category;
+            switch (_style)
+            {
+                case DroneCategory.Military:
+                    _primary = MilPrimary; _dim = MilDim; _warnColor = MilWarn;
+                    break;
+                case DroneCategory.CargoLogistics:
+                    _primary = CargoPrimary; _dim = CargoDim; _warnColor = CargoWarn;
+                    break;
+                default: // Civilian
+                    _primary = CivPrimary; _dim = CivDim; _warnColor = AccentWarn;
+                    break;
+            }
 
             _root = Panel_(canvas.transform, "HUDRoot", Color.clear, Vector2.zero, Vector2.one);
 
-            BuildTopStrip();
+            BuildTopLeftStack();
+            BuildTopRightStack();
+            BuildHeadingTape();
             BuildReticle();
-            BuildAttitudeCue();
+
+            if (_style == DroneCategory.Military)
+            {
+                BuildPitchLadder();
+                BuildVerticalTape(true, out _speedTapeArea, out _speedTickLabels, out _speedCenterLabel);
+                BuildVerticalTape(false, out _altTapeArea, out _altTickLabels, out _altCenterLabel);
+            }
+            else
+            {
+                BuildSimpleHorizon();
+            }
+
+            if (_style == DroneCategory.CargoLogistics)
+            {
+                _altGaugeArea = BuildVerticalGauge("AltGauge", 0.035f, "ALT", out _altGaugeFill);
+                _payloadGaugeArea = BuildVerticalGauge("PayloadGauge", 0.945f, "LOAD", out _payloadGaugeFill);
+            }
+
             BuildBottomBar();
-            BuildCompass();
-            BuildWindIndicator();
-            BuildTemperatureIndicator();
+            BuildWindTempCompact();
             BuildMinimap();
             BuildFpsCounter();
 
             _warning = Label(_root, "", 34, new Vector2(0.2f, 0.83f), new Vector2(0.8f, 0.89f),
-                             AccentWarn, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+                             _warnColor, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            BuildFlightMessage();
 
             BuildPhotoModeOverlay();
 
@@ -89,24 +172,76 @@ namespace AeroTerra.UI
             ApplyHudElementSettings();
         }
 
-        private void BuildTopStrip()
+        private void BuildTopLeftStack()
         {
-            var top = Panel_(_root, "TopBar", new Color(0, 0, 0, 0.35f), new Vector2(0, 0.90f), new Vector2(1, 1f));
-            Panel_(top, "BottomBorder", Accent, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, -2), new Vector2(0, 0));
-
-            Label(top, _flight.Spec.DisplayName, 22, new Vector2(0.02f, 0), new Vector2(0.35f, 1), TextMain);
-            _camModeLabel = Label(top, "CHASE DEFAULT", 22, new Vector2(0.35f, 0), new Vector2(0.65f, 1),
-                                  Accent, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
-            _payloadLabel = Label(top, "", 20, new Vector2(0.65f, 0), new Vector2(0.98f, 1),
-                                  TextDim, TMPro.TextAlignmentOptions.Right);
+            Label(_root, _flight.Spec.DisplayName, 20, new Vector2(0.02f, 0.905f), new Vector2(0.32f, 0.945f),
+                  _primary, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
+            _lat = Label(_root, "LAT 0.00000°", 15, new Vector2(0.02f, 0.865f), new Vector2(0.32f, 0.90f), _dim);
+            _lon = Label(_root, "LON 0.00000°", 15, new Vector2(0.02f, 0.83f), new Vector2(0.32f, 0.865f), _dim);
         }
+
+        private void BuildTopRightStack()
+        {
+            _camModeLabel = Label(_root, "CHASE DEFAULT", 18, new Vector2(0.68f, 0.905f), new Vector2(0.98f, 0.945f),
+                                  _primary, TMPro.TextAlignmentOptions.Right, TMPro.FontStyles.Bold);
+            _payloadLabel = Label(_root, "", 15, new Vector2(0.68f, 0.865f), new Vector2(0.98f, 0.90f),
+                                  _dim, TMPro.TextAlignmentOptions.Right);
+        }
+
+        /// <summary>Horizontal scrolling heading tape along the top edge — the FPV/jet-HUD
+        /// replacement for the old radial compass dial. A fixed pool of tick labels (every
+        /// 15°, cardinals bold) get repositioned every frame by their signed angular delta
+        /// from the current heading (Mathf.DeltaAngle) times a px-per-degree scale derived
+        /// from the ribbon's own live rect width, and hidden once they scroll outside the
+        /// visible window — RectMask2D on the ribbon clips anything that slips past the
+        /// edge before Update() gets a chance to deactivate it.</summary>
+        private const float HeadingHalfWindowDeg = 75f;
+
+        private void BuildHeadingTape()
+        {
+            _headingWidget = Panel_(_root, "HeadingWidget", Color.clear, Vector2.zero, Vector2.one);
+
+            var ribbon = Panel_(_headingWidget, "HeadingRibbon", new Color(0, 0, 0, 0.30f),
+                                new Vector2(0.30f, 0.955f), new Vector2(0.70f, 1f));
+            ribbon.gameObject.AddComponent<UnityEngine.UI.RectMask2D>();
+            _headingRibbon = ribbon;
+            Panel_(ribbon, "BottomBorder", _primary, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 0), new Vector2(0, 2));
+
+            _headingTickDegrees = new float[24];
+            _headingTickLabels = new TMPro.TextMeshProUGUI[24];
+            for (int i = 0; i < 24; i++)
+            {
+                float deg = i * 15f;
+                _headingTickDegrees[i] = deg;
+                bool cardinal = deg % 90f == 0f;
+                string text = cardinal ? CardinalName(deg) : ((int)deg).ToString("000");
+                var lbl = Label(ribbon, text, cardinal ? 16 : 12, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                cardinal ? _primary : _dim, TMPro.TextAlignmentOptions.Center,
+                                cardinal ? TMPro.FontStyles.Bold : TMPro.FontStyles.Normal);
+                lbl.enableWordWrapping = false;
+                var rt = lbl.rectTransform;
+                rt.offsetMin = new Vector2(-22, -10); rt.offsetMax = new Vector2(22, 10);
+                _headingTickLabels[i] = lbl;
+            }
+
+            // Fixed downward pointer + boxed numeric readout just below the ribbon.
+            Panel_(ribbon, "Pointer", _primary, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-3, -2), new Vector2(3, 4));
+            var box = Panel_(_headingWidget, "HeadingBox", new Color(0, 0, 0, 0.55f), new Vector2(0.465f, 0.915f), new Vector2(0.535f, 0.953f));
+            _headingCenterLabel = Label(box, "000", 16, Vector2.zero, Vector2.one, _primary,
+                                       TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+        }
+
+        private static string CardinalName(float deg) => deg switch
+        {
+            0f => "N", 90f => "E", 180f => "S", 270f => "W", _ => ((int)deg).ToString("000"),
+        };
 
         private void BuildReticle()
         {
             var reticle = Panel_(_root, "Reticle", Color.clear, Vector2.zero, Vector2.one);
-            _reticleCross = Panel_(reticle, "CrossH", TextMain, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            _reticleCross = Panel_(reticle, "CrossH", _primary, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                                     new Vector2(-16, -1), new Vector2(16, 1));
-            _reticleV = Panel_(reticle, "CrossV", TextMain, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            _reticleV = Panel_(reticle, "CrossV", _primary, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                                 new Vector2(-1, -16), new Vector2(1, 16));
 
             _reticleCorners = new RectTransform[4];
@@ -119,54 +254,136 @@ namespace AeroTerra.UI
             }
         }
 
-        private void BuildAttitudeCue()
+        /// <summary>Civilian/Cargo attitude cue — a single roll+pitch line, same
+        /// treatment the whole HUD used before this redesign.</summary>
+        private void BuildSimpleHorizon()
         {
             var cueArea = Panel_(_root, "AttitudeCue", Color.clear, new Vector2(0.5f, 0.62f), new Vector2(0.5f, 0.62f),
                                   new Vector2(-90, -30), new Vector2(90, 30));
-            _horizonLine = Panel_(cueArea, "HorizonLine", TextDim, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            _horizonLine = Panel_(cueArea, "HorizonLine", _dim, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                                    new Vector2(-90, -1), new Vector2(90, 1));
-            Panel_(cueArea, "BoreRef", Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            Panel_(cueArea, "BoreRef", _primary, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                    new Vector2(-4, -4), new Vector2(4, 4));
+        }
+
+        /// <summary>Military artificial-horizon pitch ladder — rungs every 10° built once
+        /// as static geometry around a single pivot transform (_ladder); Update() rotates
+        /// that one pivot by -roll and translates it by -pitch, exactly the same two-line
+        /// math the old single-line horizon cue used, so every rung moves together as a
+        /// rigid ladder. The permanent boresight cross (BuildReticle) stays fixed at
+        /// center as the "where the nose actually points" reference the ladder moves past.</summary>
+        private const float LadderPxPerDeg = 4f;
+
+        private void BuildPitchLadder()
+        {
+            var area = Panel_(_root, "PitchLadderArea", Color.clear, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                              new Vector2(-140, -140), new Vector2(140, 140));
+            _ladder = Panel_(area, "LadderPivot", Color.clear, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+
+            foreach (int a in new[] { 10, 20, 30 })
+            {
+                AddLadderRung(a);
+                AddLadderRung(-a);
+            }
+        }
+
+        private void AddLadderRung(int angleDeg)
+        {
+            float y = angleDeg * LadderPxPerDeg;
+            var rung = Panel_(_ladder, "Rung" + angleDeg, Color.clear, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                              new Vector2(-90, y - 10), new Vector2(90, y + 10));
+            Panel_(rung, "L", _primary, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-90, 9), new Vector2(-30, 11));
+            Panel_(rung, "R", _primary, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(30, 9), new Vector2(90, 11));
+            var lbl = Label(rung, Mathf.Abs(angleDeg).ToString(), 12, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                            _primary, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            lbl.enableWordWrapping = false;
+            var rt = lbl.rectTransform;
+            rt.offsetMin = new Vector2(-118, 0); rt.offsetMax = new Vector2(-98, 20);
+        }
+
+        /// <summary>Military scrolling vertical tape (speed left of center, altitude right)
+        /// — a fixed pool of 5 tick labels recomputed every frame from the live value
+        /// (nearest-step baseline ± 2 steps) rather than a true masked-scroll, so no extra
+        /// content/viewport plumbing is needed: the same illusion, far less machinery.</summary>
+        private void BuildVerticalTape(bool isSpeed, out RectTransform area,
+            out TMPro.TextMeshProUGUI[] ticks, out TMPro.TextMeshProUGUI centerLabel)
+        {
+            float x0 = isSpeed ? 0.155f : 0.845f;
+            var areaRt = Panel_(_root, isSpeed ? "SpeedTape" : "AltTape", Color.clear,
+                                new Vector2(x0, 0.5f), new Vector2(x0, 0.5f), new Vector2(-40, -110), new Vector2(40, 110));
+            areaRt.gameObject.AddComponent<UnityEngine.UI.RectMask2D>();
+            area = areaRt;
+
+            var t = new TMPro.TextMeshProUGUI[5];
+            for (int i = 0; i < 5; i++)
+            {
+                var lbl = Label(areaRt, "", 14, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), _dim,
+                                TMPro.TextAlignmentOptions.Center);
+                lbl.enableWordWrapping = false;
+                var rt = lbl.rectTransform;
+                rt.offsetMin = new Vector2(-38, -12); rt.offsetMax = new Vector2(38, 12);
+                t[i] = lbl;
+            }
+            ticks = t;
+
+            var box = Panel_(areaRt, "CenterBox", new Color(0, 0, 0, 0.55f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                             new Vector2(-38, -15), new Vector2(38, 15));
+            centerLabel = Label(box, "0", 18, Vector2.zero, Vector2.one, _primary,
+                                TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+        }
+
+        /// <summary>Cargo vertical bar-gauge (altitude ceiling / payload load) — a simple
+        /// bottom-anchored fill, same "anchorMax driven by fraction" convention the power
+        /// gauge already uses, placed at the screen's side edges.</summary>
+        private RectTransform BuildVerticalGauge(string name, float x0, string caption, out RectTransform fill)
+        {
+            Label(_root, caption, 12, new Vector2(x0 - 0.03f, 0.775f), new Vector2(x0 + 0.05f, 0.80f),
+                  _dim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+
+            var area = Panel_(_root, name, new Color(0, 0, 0, 0.35f), new Vector2(x0, 0.22f), new Vector2(x0 + 0.02f, 0.77f));
+            Panel_(area, "Track", new Color(1, 1, 1, 0.08f), new Vector2(0.15f, 0.02f), new Vector2(0.85f, 0.98f));
+            var fillArea = Panel_(area, "FillArea", Color.clear, new Vector2(0.15f, 0.02f), new Vector2(0.85f, 0.98f));
+            fill = Panel_(fillArea, "Fill", _primary, new Vector2(0f, 0f), new Vector2(1f, 0f));
+            return area;
         }
 
         private void BuildBottomBar()
         {
-            var bar = Panel_(_root, "HUDBar", new Color(0, 0, 0, 0.45f), new Vector2(0, 0), new Vector2(1, 0.12f));
-            Panel_(bar, "TopBorder", Accent, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, 0), new Vector2(0, 2));
+            var bar = Panel_(_root, "HUDBar", new Color(0, 0, 0, 0.45f), new Vector2(0, 0), new Vector2(1, 0.13f));
+            Panel_(bar, "TopBorder", _primary, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, 0), new Vector2(0, 2));
 
-            // Row 1 (top half): speed, altitude, throttle, heading, battery.
-            _speed = Label(bar, "0 km/h", 24, new Vector2(0.02f, 0.5f), new Vector2(0.14f, 1));
-            _alt = Label(bar, "ALT 0 m", 24, new Vector2(0.15f, 0.5f), new Vector2(0.30f, 1));
-            _throttle = Label(bar, "THR 0%", 24, new Vector2(0.31f, 0.5f), new Vector2(0.44f, 1));
-            _heading = Label(bar, "HDG 000°", 24, new Vector2(0.45f, 0.5f), new Vector2(0.58f, 1));
-            _battery = Label(bar, "BAT 100%", 24, new Vector2(0.60f, 0.5f), new Vector2(0.78f, 1));
-            BuildPowerIcon(bar, new Vector2(0.785f, 0.58f), new Vector2(0.98f, 0.92f),
-                           _flight.Spec.PowerSystem == PowerSystemType.Fuel);
+            bool showSpeedAlt = _style != DroneCategory.Military;
+            float colX = 0.02f;
+            if (showSpeedAlt)
+            {
+                _speed = Label(bar, "0 km/h", 22, new Vector2(0.02f, 0.5f), new Vector2(0.16f, 1), _primary);
+                _alt = Label(bar, "ALT 0 m", 22, new Vector2(0.17f, 0.5f), new Vector2(0.31f, 1), _primary);
+                colX = 0.33f;
+            }
+            _throttle = Label(bar, "THR 0%", 22, new Vector2(colX, 0.5f), new Vector2(colX + 0.14f, 1), _dim);
+            float battX = colX + 0.16f;
+            _battery = Label(bar, "BAT 100%", 22, new Vector2(battX, 0.5f), new Vector2(battX + 0.18f, 1), _primary);
+            BuildPowerIcon(bar, new Vector2(battX + 0.185f, 0.58f), new Vector2(battX + 0.235f, 0.92f),
+                          _flight.Spec.PowerSystem == PowerSystemType.Fuel);
 
-            foreach (float x in new[] { 0.145f, 0.305f, 0.445f, 0.585f, 0.785f })
-                Panel_(bar, "Div", new Color(1, 1, 1, 0.12f), new Vector2(x, 0.15f), new Vector2(x, 0.85f),
-                       new Vector2(-1, 0), new Vector2(1, 0));
-
-            // Row 2 (bottom half): GPS coordinates, vertical speed, drop-payload hint.
-            _lat = Label(bar, "LAT 0.00000°", 20, new Vector2(0.02f, 0), new Vector2(0.20f, 0.48f), TextDim);
-            _lon = Label(bar, "LON 0.00000°", 20, new Vector2(0.21f, 0), new Vector2(0.39f, 0.48f), TextDim);
-            _vspeed = Label(bar, "V/S 0.0 m/s", 20, new Vector2(0.40f, 0), new Vector2(0.58f, 0.48f), TextDim);
+            // Row 2 (bottom half): vertical speed, drop-payload hint, hardpoint pips.
+            _vspeed = Label(bar, "V/S 0.0 m/s", 18, new Vector2(0.02f, 0), new Vector2(0.22f, 0.48f), _dim);
             // Kamikaze airframes have nothing to release — the whole drone is the
             // munition and detonates on impact, so the hint says so instead of [I].
             _kamikaze = _flight.Spec.IsKamikazeClass;
-            _dropHint = Label(bar, _kamikaze ? "IMPACT DETONATION" : "[I] DROP", 20,
-                              new Vector2(0.60f, 0), new Vector2(0.78f, 0.48f), TextDim,
+            _dropHint = Label(bar, _kamikaze ? "IMPACT DETONATION" : "[I] DROP", 18,
+                              new Vector2(0.24f, 0), new Vector2(0.48f, 0.48f), _dim,
                               TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
 
             BuildPayloadIcons(bar);
         }
 
-        /// <summary>Row of hardpoint icons (bottom bar, right of the drop hint) — one
-        /// pip per DroneSpecification.PayloadHardpoints, shaped by PayloadKind so the
-        /// icon itself communicates ordnance TYPE, not just "military vs. civilian."
-        /// Drops are sequential per store (see PayloadDropper), so pips go dark one at
-        /// a time as stores are expended, then all relight after the rearm cooldown.
-        /// Skipped entirely for drones with no payload capability (e.g. the racing quad).</summary>
+        /// <summary>Row of hardpoint icons (bottom bar, right side) — one pip per
+        /// DroneSpecification.PayloadHardpoints, shaped by PayloadKind so the icon itself
+        /// communicates ordnance TYPE, not just "military vs. civilian." Drops are
+        /// sequential per store (see PayloadDropper), so pips go dark one at a time as
+        /// stores are expended, then all relight after the rearm cooldown. Skipped
+        /// entirely for drones with no payload capability (e.g. the racing quad).</summary>
         private void BuildPayloadIcons(Transform bar)
         {
             _hardpoints = _flight.Spec.PayloadHardpoints;
@@ -174,7 +391,7 @@ namespace AeroTerra.UI
             if (_hardpoints <= 0 || _flight.Spec.MaxPayloadKg <= 0f) return;
 
             var kind = _flight.EffectivePayloadKind;
-            _payloadPipsRow = Panel_(bar, "PayloadPipsRow", Color.clear, new Vector2(0.80f, 0f), new Vector2(0.98f, 0.48f));
+            _payloadPipsRow = Panel_(bar, "PayloadPipsRow", Color.clear, new Vector2(0.55f, 0f), new Vector2(0.98f, 0.48f));
             float slot = 1f / _hardpoints;
             _payloadPips = new UnityEngine.UI.Image[_hardpoints];
             for (int i = 0; i < _hardpoints; i++)
@@ -236,9 +453,8 @@ namespace AeroTerra.UI
 
         /// <summary>Battery (or fuel-canister, for PowerSystemType.Fuel airframes) gauge
         /// — a real silhouette (body outline + terminal/spout nub) with the charge fill
-        /// inset inside it, replacing the old bare rectangle bar. _batteryFill keeps the
-        /// exact same role Update() already drives it by (anchorMax.x = powerPct) — only
-        /// its container changed shape.</summary>
+        /// inset inside it. _batteryFill keeps the exact same role Update() already drives
+        /// it by (anchorMax.x = powerPct) — only its container/theme color changed.</summary>
         private void BuildPowerIcon(Transform parent, Vector2 anchorMin, Vector2 anchorMax, bool fuel)
         {
             var holder = Panel_(parent, "PowerIcon", Color.clear, anchorMin, anchorMax);
@@ -261,129 +477,91 @@ namespace AeroTerra.UI
                 fillArea = Panel_(holder, "FillArea", Color.clear, new Vector2(0.07f, 0.22f), new Vector2(0.81f, 0.78f));
             }
 
-            _batteryFill = Panel_(fillArea, "Fill", Accent, Vector2.zero, new Vector2(0f, 1f));
+            _batteryFill = Panel_(fillArea, "Fill", _primary, Vector2.zero, new Vector2(0f, 1f));
         }
 
-        /// <summary>Rotating compass rose: an 8-point dial that spins beneath a fixed
-        /// heading pointer, with each letter counter-rotated so it always stays upright
-        /// on screen regardless of the dial's current rotation.</summary>
-        private static readonly (string text, float deg)[] CompassPoints =
+        /// <summary>Compact wind/temperature readouts tucked directly beside the power
+        /// gauge (Settings ▸ Game ▸ HUD elements can toggle either independently) — replaces
+        /// the old stacked corner panels with two small right-aligned lines, matching the
+        /// "redistribute secondary instruments to the edges, keep them out of the way"
+        /// direction the rest of this redesign follows.</summary>
+        private void BuildWindTempCompact()
         {
-            ("N", 0f), ("NE", 45f), ("E", 90f), ("SE", 135f),
-            ("S", 180f), ("SW", 225f), ("W", 270f), ("NW", 315f),
-        };
+            _windDial = Panel_(_root, "WindCompact", Color.clear, new Vector2(0.80f, 0.155f), new Vector2(0.895f, 0.185f));
+            _windNeedle = Panel_(_windDial, "NeedleArea", Color.clear, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                                 new Vector2(-6f, -6f), new Vector2(6f, 6f));
+            Panel_(_windNeedle, "Tail", _dim, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-1f, -6f), new Vector2(1f, 0f));
+            Panel_(_windNeedle, "Head", _primary, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-1f, 0f), new Vector2(1f, 6f));
+            _windSpeedLabel = Label(_windDial, "-- m/s", 13, new Vector2(0.12f, 0f), new Vector2(1f, 1f), _dim,
+                                    TMPro.TextAlignmentOptions.Right, TMPro.FontStyles.Bold);
 
-        private void BuildCompass()
-        {
-            var ring = Panel_(_root, "Compass", new Color(0, 0, 0, 0.30f),
-                               new Vector2(0.14f, 0.90f), new Vector2(0.14f, 0.90f),
-                               new Vector2(-68, -102), new Vector2(68, -14));
-
-            const float radius = 34f;
-            _compassLabels = new RectTransform[CompassPoints.Length];
-            for (int i = 0; i < CompassPoints.Length; i++)
-            {
-                var (text, deg) = CompassPoints[i];
-                bool cardinal = deg % 90f == 0f;
-                var lbl = Label(ring, text, cardinal ? 15 : 11,
-                                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                                 cardinal ? Accent : TextDim, TMPro.TextAlignmentOptions.Center,
-                                 cardinal ? TMPro.FontStyles.Bold : TMPro.FontStyles.Normal);
-                var rt = lbl.rectTransform;
-                rt.offsetMin = new Vector2(-13, -9); rt.offsetMax = new Vector2(13, 9);
-                float rad = deg * Mathf.Deg2Rad;
-                rt.anchoredPosition = new Vector2(Mathf.Sin(rad) * radius, Mathf.Cos(rad) * radius);
-                _compassLabels[i] = rt;
-            }
-
-            // Fixed marker at the top of the dial — never rotates, always reads
-            // "this is the direction the nose is pointing right now."
-            Panel_(ring, "Pointer", Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                   new Vector2(-2, radius + 8), new Vector2(2, radius + 16));
-
-            _compassRing = ring;
-        }
-
-        /// <summary>Small dial directly below the compass: a needle pointing the
-        /// direction WeatherSystem's current wind is blowing TOWARD (windsock
-        /// convention), plus the steady-state speed in m/s — the same figure Free
-        /// Flight's conditions screen shows (WeatherSystem.BaseWindSpeedMs, or the
-        /// manual override), not the raw force vector's magnitude (CurrentWind is a
-        /// force applied via AddForce, not a velocity, so its magnitude isn't m/s).</summary>
-        private void BuildWindIndicator()
-        {
-            var dial = Panel_(_root, "WindDial", new Color(0, 0, 0, 0.30f),
-                               new Vector2(0.14f, 0.90f), new Vector2(0.14f, 0.90f),
-                               new Vector2(-50f, -186f), new Vector2(50f, -108f));
-            _windDial = dial;
-
-            Label(dial, "WIND", 10, new Vector2(0f, 0.74f), new Vector2(1f, 0.98f),
-                  TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
-            _windSpeedLabel = Label(dial, "-- m/s", 13, new Vector2(0f, 0.02f), new Vector2(1f, 0.26f),
-                                    TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
-
-            // Half-and-half needle (accent head / dim tail) — same "plain shapes over
-            // missing glyphs" convention as StarRow, reads as a windsock/weather-vane
-            // pointer without needing an imported icon. Rotating the shared parent
-            // (rather than head+tail separately) keeps both halves moving as one needle.
-            _windNeedle = Panel_(dial, "NeedleArea", Color.clear, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                                 new Vector2(-16f, -16f), new Vector2(16f, 16f));
-            Panel_(_windNeedle, "Tail", TextDim, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                   new Vector2(-2f, -16f), new Vector2(2f, 0f));
-            Panel_(_windNeedle, "Head", Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                   new Vector2(-2f, 0f), new Vector2(2f, 16f));
-        }
-
-        /// <summary>Small instrument directly below the wind dial, same frame style —
-        /// shows the current ambient air temperature (Settings ▸ Flying Conditions),
-        /// the same figure that drives BatterySystem.PerformanceFactor's thrust derate.</summary>
-        private void BuildTemperatureIndicator()
-        {
-            var panel = Panel_(_root, "TempPanel", new Color(0, 0, 0, 0.30f),
-                                new Vector2(0.14f, 0.90f), new Vector2(0.14f, 0.90f),
-                                new Vector2(-50f, -270f), new Vector2(50f, -192f));
-            _tempPanel = panel;
-
-            Label(panel, "TEMP", 10, new Vector2(0f, 0.74f), new Vector2(1f, 0.98f),
-                  TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
-            _tempLabel = Label(panel, "-- °C", 13, new Vector2(0f, 0.02f), new Vector2(1f, 0.26f),
-                                TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            _tempPanel = Panel_(_root, "TempCompact", Color.clear, new Vector2(0.90f, 0.155f), new Vector2(0.98f, 0.185f));
+            _tempLabel = Label(_tempPanel, "-- °C", 13, Vector2.zero, Vector2.one, _dim,
+                               TMPro.TextAlignmentOptions.Right, TMPro.FontStyles.Bold);
         }
 
         /// <summary>Square "radar" nav readout, top-right — a framed instrument rather
         /// than a literal top-down camera view (which would need a second camera
         /// actively streaming Cesium 3D tiles, unverified without an Editor). North-up,
-        /// fixed at the drone (center); the only tracked point right now is the map's
-        /// spawn origin — Unity world (0,0,0) IS that origin by construction, since
-        /// MapManager.BuildWorld() sets the CesiumGeoreference there, so no lat/lon
-        /// lookup is needed for the HOME marker's bearing/distance.</summary>
+        /// fixed at the drone (center, with a heading nose-line); the other tracked
+        /// point is the OPERATOR marker — GameManager.SpawnLocalPosition, the exact
+        /// ground X/Z DroneOperatorBuilder actually plants the operator figure/beacon
+        /// at, cached once in Update() the first time it runs (position is fixed for
+        /// the whole flight). This replaced an earlier version of this marker that
+        /// assumed Unity world (0,0,0) was always the right point — true only for the
+        /// map's own default spawn, wrong the moment a Flying Conditions ▸ Spawn
+        /// Location preset was picked, since that offsets the actual launch point away
+        /// from world origin. An upright square (vs. Landmarks' 45°-rotated diamonds
+        /// below) keeps it visually distinct from every other marker on the dial at a
+        /// glance. Shared by all three HUD styles (Military/Civilian/CargoLogistics) —
+        /// only _primary/_dim differ, so this one change updates every style's minimap.</summary>
         private void BuildMinimap()
         {
-            var frame = Panel_(_root, "MinimapFrame", new Color(Accent.r, Accent.g, Accent.b, 0.5f),
+            var frame = Panel_(_root, "MinimapFrame", new Color(_primary.r, _primary.g, _primary.b, 0.5f),
                                 new Vector2(0.98f, 0.83f), new Vector2(0.98f, 0.83f),
-                                new Vector2(-152f, -152f), new Vector2(0f, 0f));
+                                new Vector2(-168f, -168f), new Vector2(0f, 0f));
             _minimapFrame = frame;
 
-            Label(frame, "NAV", 11, new Vector2(0f, 0.90f), new Vector2(1f, 1f),
-                  TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
-            _minimapDistLabel = Label(frame, "HOME --", 11, new Vector2(0f, 0f), new Vector2(1f, 0.10f),
-                                      TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            Label(frame, "NAV", 11, new Vector2(0f, 0.91f), new Vector2(1f, 1f),
+                  _dim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            _minimapOperatorLabel = Label(frame, "OPERATOR --", 11, new Vector2(0f, 0f), new Vector2(1f, 0.09f),
+                                          _dim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
 
-            var box = Panel_(frame, "MinimapBg", new Color(0, 0, 0, 0.45f), new Vector2(0f, 0.10f), new Vector2(1f, 0.90f),
+            var box = Panel_(frame, "MinimapBg", new Color(0, 0, 0, 0.45f), new Vector2(0f, 0.09f), new Vector2(1f, 0.91f),
                               new Vector2(2f, 2f), new Vector2(-2f, -2f));
 
             // Decorative range rings (nested translucent squares, not true circles —
-            // same reasoning as the frame itself) giving a rough sense of scale.
+            // same reasoning as the frame itself) giving a rough sense of scale, each
+            // labeled with its real-world radius so the rings mean something at a glance.
             Panel_(box, "RingOuter", new Color(1, 1, 1, 0.05f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                    new Vector2(-MinimapRadiusPx, -MinimapRadiusPx), new Vector2(MinimapRadiusPx, MinimapRadiusPx));
             Panel_(box, "RingInner", new Color(1, 1, 1, 0.07f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                    new Vector2(-MinimapRadiusPx * 0.5f, -MinimapRadiusPx * 0.5f), new Vector2(MinimapRadiusPx * 0.5f, MinimapRadiusPx * 0.5f));
+            var ringLabel = Label(box, $"{MinimapRangeM:0}M", 8, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                  _dim, TMPro.TextAlignmentOptions.Center);
+            ringLabel.enableWordWrapping = false;
+            ringLabel.raycastTarget = false;
+            var ringLabelRt = ringLabel.rectTransform;
+            ringLabelRt.sizeDelta = new Vector2(40f, 12f);
+            ringLabelRt.anchoredPosition = new Vector2(0f, MinimapRadiusPx - 7f);
 
-            // HOME marker — a small accent diamond, clamped to the ring's edge once the
-            // real distance exceeds MinimapRangeM (classic off-scale radar behavior).
-            _minimapHome = Panel_(box, "Home", Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                                  new Vector2(-4f, -4f), new Vector2(4f, 4f));
-            _minimapHome.localRotation = Quaternion.Euler(0, 0, 45f);
+            // Fixed "N" cardinal at the top of the dial — north-up, so this never moves
+            // or rotates; the only orientation cue a first-time player needs to read
+            // the dial correctly.
+            var northLabel = Label(box, "N", 10, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                                   _primary, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            northLabel.enableWordWrapping = false;
+            northLabel.raycastTarget = false;
+            var northRt = northLabel.rectTransform;
+            northRt.sizeDelta = new Vector2(16f, 12f);
+            northRt.anchoredPosition = new Vector2(0f, -8f);
+
+            // Operator marker — upright square (deliberately NOT rotated, unlike the
+            // diamond-shaped Landmarks below, so it reads as visually distinct at a
+            // glance), clamped to the ring's edge once the real distance exceeds
+            // MinimapRangeM (classic off-scale radar behavior).
+            _minimapOperator = Panel_(box, "Operator", _primary, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                      new Vector2(-4.5f, -4.5f), new Vector2(4.5f, 4.5f));
 
             // Drone marker — fixed at center; a short nose line shows live heading
             // (north-up map, matching the LAT/LON readout convention — the map itself
@@ -397,11 +575,11 @@ namespace AeroTerra.UI
         }
 
         /// <summary>One small diamond + name tag per MapDefinition.Landmark on the current
-        /// map — same off-scale ring-edge clamp treatment as the HOME marker (most real
-        /// landmarks sit well outside MinimapRangeM, so this mainly reads as "which
-        /// direction to fly," same as HOME already does past 400 m). Offsets are computed
-        /// once here via the flat-earth approximation (MapDefinition.FlatOffsetMeters) since
-        /// neither the map nor its landmarks change mid-flight.</summary>
+        /// map — same off-scale ring-edge clamp treatment as the OPERATOR marker (most
+        /// real landmarks sit well outside MinimapRangeM, so this mainly reads as "which
+        /// direction to fly," same as OPERATOR already does past 400 m). Offsets are
+        /// computed once here via the flat-earth approximation (MapDefinition.
+        /// FlatOffsetMeters) since neither the map nor its landmarks change mid-flight.</summary>
         private void BuildMinimapLandmarks(Transform box)
         {
             var map = GameManager.Instance != null ? GameManager.Instance.SelectedMap : null;
@@ -421,14 +599,14 @@ namespace AeroTerra.UI
                 _minimapLandmarkOffsetsM[i] = MapDefinition.FlatOffsetMeters(
                     lm.Latitude, lm.Longitude, map.Latitude, map.Longitude);
 
-                var marker = Panel_(box, "Landmark_" + lm.Name, Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                var marker = Panel_(box, "Landmark_" + lm.Name, _primary, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                                     new Vector2(-3f, -3f), new Vector2(3f, 3f));
                 marker.localRotation = Quaternion.Euler(0, 0, 45f);
                 marker.GetComponent<UnityEngine.UI.Image>().raycastTarget = false;
                 _minimapLandmarks[i] = marker;
 
                 var label = Label(marker, lm.Name, 8, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                                  Accent, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+                                  _primary, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
                 label.enableWordWrapping = false;
                 label.raycastTarget = false;
                 var labelRt = label.rectTransform;
@@ -445,6 +623,32 @@ namespace AeroTerra.UI
                               TextDim, TMPro.TextAlignmentOptions.Right, TMPro.FontStyles.Bold);
         }
 
+        /// <summary>Centered, self-fading event callout just above the reticle — e.g.
+        /// ParachuteController's "PARACHUTE DEPLOYED" / "TOO LOW TO DEPLOY" pings (see
+        /// ShowFlightMessage). Starts hidden; Update() fades it out and deactivates it
+        /// once its timer runs out.</summary>
+        private void BuildFlightMessage()
+        {
+            _flightMessageLabel = Label(_root, "", 22, new Vector2(0.25f, 0.685f), new Vector2(0.75f, 0.735f),
+                                       _primary, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            _flightMessageLabel.gameObject.SetActive(false);
+        }
+
+        /// <summary>Shows a brief on-screen callout for a one-off flight event (parachute
+        /// deploy/deny, and available for similar future events) — separate from
+        /// _warning, which is a persistent, continuously-recomputed power-state banner,
+        /// not a one-shot ping. Themed in the HUD's own primary/warn color so it reads
+        /// consistently across all three HUD styles. Restarting the timer on a repeat
+        /// call (rather than queuing) is deliberate: only the latest event matters.</summary>
+        public void ShowFlightMessage(string text, bool isWarning = false)
+        {
+            if (_flightMessageLabel == null) return;
+            _flightMessageLabel.text = text;
+            _flightMessageLabel.color = isWarning ? _warnColor : _primary;
+            _flightMessageLabel.gameObject.SetActive(true);
+            _flightMessageTimer = FlightMessageDurationSec;
+        }
+
         /// <summary>Bottom-center control-hint bar + live FOV/exposure readout, shown only
         /// while DroneCameraRig's detached Photo mode is active (see SetPhotoModeActive/
         /// UpdatePhotoModeReadout, driven every frame from DroneCameraRig.UpdatePhotoMode).</summary>
@@ -453,7 +657,7 @@ namespace AeroTerra.UI
             _photoPanel = Panel_(_root, "PhotoModeBar", new Color(0, 0, 0, 0.55f),
                                  new Vector2(0.24f, 0.02f), new Vector2(0.76f, 0.095f));
             Label(_photoPanel, "PHOTO MODE", 15, new Vector2(0.03f, 0.52f), new Vector2(0.30f, 0.94f),
-                  Accent, TMPro.TextAlignmentOptions.MidlineLeft, TMPro.FontStyles.Bold);
+                  _primary, TMPro.TextAlignmentOptions.MidlineLeft, TMPro.FontStyles.Bold);
             _photoReadout = Label(_photoPanel, "", 13, new Vector2(0.03f, 0.05f), new Vector2(0.30f, 0.50f),
                                   TextDim, TMPro.TextAlignmentOptions.MidlineLeft);
             Label(_photoPanel, "RMB LOOK · WASD MOVE · Q/E UP-DOWN · SHIFT FAST · [ ] FOV · − = EXPOSURE · F8 EXIT",
@@ -494,7 +698,7 @@ namespace AeroTerra.UI
             {
                 CamMode.Bottom => AccentWarn,
                 CamMode.Thermal => new Color(0.55f, 0.95f, 0.65f),
-                _ => TextMain,
+                _ => _primary,
             };
             _reticleCross.GetComponent<UnityEngine.UI.Image>().color = reticleColor;
             _reticleV.GetComponent<UnityEngine.UI.Image>().color = reticleColor;
@@ -505,13 +709,18 @@ namespace AeroTerra.UI
 
         /// <summary>Applies each per-element HUD visibility toggle from Settings ▸ Game.
         /// Called once from Init() and again live any time one is flipped from the
-        /// pause menu mid-flight. Narrator (voice+text) isn't handled here — it's
-        /// gated directly in NarratorController.Enqueue().</summary>
+        /// pause menu mid-flight. Every widget lookup is null-guarded since which ones
+        /// exist depends on the drone's HUD style (e.g. speed tapes only exist on
+        /// Military, gauges only on CargoLogistics). Narrator (voice+text) isn't handled
+        /// here — it's gated directly in NarratorController.Enqueue().</summary>
         public void ApplyHudElementSettings()
         {
             var s = GameManager.Instance.Settings;
-            _speed.gameObject.SetActive(s.HudShowSpeed);
-            _alt.gameObject.SetActive(s.HudShowAltitude);
+            if (_speed != null) _speed.gameObject.SetActive(s.HudShowSpeed);
+            if (_speedTapeArea != null) _speedTapeArea.gameObject.SetActive(s.HudShowSpeed);
+            if (_alt != null) _alt.gameObject.SetActive(s.HudShowAltitude);
+            if (_altTapeArea != null) _altTapeArea.gameObject.SetActive(s.HudShowAltitude);
+            if (_altGaugeArea != null) _altGaugeArea.gameObject.SetActive(s.HudShowAltitude);
             _throttle.gameObject.SetActive(s.HudShowThrottle);
             _lat.gameObject.SetActive(s.HudShowGps);
             _lon.gameObject.SetActive(s.HudShowGps);
@@ -519,7 +728,8 @@ namespace AeroTerra.UI
             if (_powerIconHolder != null) _powerIconHolder.gameObject.SetActive(s.HudShowBattery);
             _payloadLabel.gameObject.SetActive(s.HudShowPayload);
             if (_payloadPipsRow != null) _payloadPipsRow.gameObject.SetActive(s.HudShowPayload);
-            if (_compassRing != null) _compassRing.gameObject.SetActive(s.HudShowCompass);
+            if (_payloadGaugeArea != null) _payloadGaugeArea.gameObject.SetActive(s.HudShowPayload);
+            if (_headingWidget != null) _headingWidget.gameObject.SetActive(s.HudShowCompass);
             if (_windDial != null) _windDial.gameObject.SetActive(s.HudShowWind);
             if (_tempPanel != null) _tempPanel.gameObject.SetActive(s.HudShowTemperature);
             if (_minimapFrame != null) _minimapFrame.gameObject.SetActive(s.HudShowMinimap);
@@ -532,10 +742,14 @@ namespace AeroTerra.UI
         private void Update()
         {
             if (_flight == null || !_root.gameObject.activeSelf) return;
-            _speed.text = $"{_flight.CurrentSpeedKmh:0} km/h";
-            _alt.text = $"ALT {_flight.transform.position.y:0} m";
+
+            float speedKmh = _flight.CurrentSpeedKmh;
+            float altM = _flight.transform.position.y;
+            float heading = _flight.transform.eulerAngles.y;
+
+            if (_speed != null) _speed.text = $"{speedKmh:0} km/h";
+            if (_alt != null) _alt.text = $"ALT {altM:0} m";
             _throttle.text = $"THR {_flight.Throttle01 * 100f:0}%";
-            _heading.text = $"HDG {(_flight.transform.eulerAngles.y):000}°";
             _vspeed.text = $"V/S {_flight.VerticalSpeedMs:+0.0;-0.0} m/s";
 
             var llh = MapManager.Instance != null
@@ -555,7 +769,7 @@ namespace AeroTerra.UI
                 : $"{powerLabel} --";
             _batteryFill.anchorMax = new Vector2(powerPct, 1);
             _batteryFill.GetComponent<UnityEngine.UI.Image>().color =
-                powerPct > 0.3f ? Accent : AccentWarn;
+                powerPct > 0.3f ? _primary : _warnColor;
 
             float payloadKg = _flight.Payload != null ? _flight.Payload.CurrentPayloadKg : 0f;
             bool loaded = payloadKg > 0f;
@@ -565,28 +779,47 @@ namespace AeroTerra.UI
             int remaining = _dropper != null
                 ? Mathf.RoundToInt(_dropper.StoresRemaining * (float)_hardpoints / Mathf.Max(1, _dropper.StoreCount))
                 : loaded ? _hardpoints : 0;
+
+            // AT-R4 Hornet only: while Warhead is the live-selected category ([J] to
+            // switch — see PayloadDropper.TrySwitchPayloadKind), [I] self-destructs
+            // instead of dropping a store (PayloadDropper.TryDrop), so the hint/label
+            // need to say so instead of the normal drop wording — showing "[I] DROP"
+            // here would be actively misleading about what the key now does.
+            bool hornetSelfDestruct = _flight.Spec.Id == "at-r4" && _flight.EffectivePayloadKind == PayloadKind.Warhead;
             _payloadLabel.text = _kamikaze
                 ? (loaded ? $"WARHEAD ARMED {payloadKg:0.#} kg" : "WARHEAD EXPENDED")
-                : loaded
-                    ? $"{remaining}/{_hardpoints} {_flight.Spec.PayloadTypeName.ToUpperInvariant()} {payloadKg:0.#} kg"
-                    : _hardpoints > 0 ? $"0/{_hardpoints} REARMING" : "PAYLOAD EMPTY";
-            _dropHint.color = loaded ? (_kamikaze ? AccentWarn : Accent) : TextDim;
+                : hornetSelfDestruct
+                    ? $"WARHEAD ARMED {payloadKg:0.#} kg — SELF-DESTRUCT"
+                    : loaded
+                        ? $"{remaining}/{_hardpoints} {_flight.Spec.PayloadTypeName.ToUpperInvariant()} {payloadKg:0.#} kg"
+                        : _hardpoints > 0 ? $"0/{_hardpoints} REARMING" : "PAYLOAD EMPTY";
+            _dropHint.text = _kamikaze ? "IMPACT DETONATION" : hornetSelfDestruct ? "[I] SELF-DESTRUCT" : "[I] DROP";
+            _dropHint.color = hornetSelfDestruct ? _warnColor // always available, regardless of remaining payload weight
+                             : _kamikaze ? (loaded ? _warnColor : _dim)
+                             : (loaded ? _primary : _dim);
 
             if (_payloadPips != null)
             {
                 Color fillColor = _militaryPayload ? AccentWarn : Accent;
                 Color emptyColor = new Color(1, 1, 1, 0.15f);
                 for (int i = 0; i < _payloadPips.Length; i++)
-                    _payloadPips[i].color = (_kamikaze ? loaded : i < remaining) ? fillColor : emptyColor;
+                    _payloadPips[i].color = ((_kamikaze || hornetSelfDestruct) ? loaded : i < remaining) ? fillColor : emptyColor;
             }
 
-            float heading = _flight.transform.eulerAngles.y;
-            if (_compassRing != null)
+            if (_payloadGaugeFill != null)
             {
-                _compassRing.localEulerAngles = new Vector3(0, 0, heading);
-                var counter = Quaternion.Euler(0, 0, -heading);
-                foreach (var lbl in _compassLabels) lbl.localRotation = counter;
+                float maxKg = Mathf.Max(0.01f, _flight.Spec.MaxPayloadKg);
+                _payloadGaugeFill.anchorMax = new Vector2(1f, Mathf.Clamp01(payloadKg / maxKg));
             }
+            if (_altGaugeFill != null)
+            {
+                float ceilingM = Mathf.Max(1f, _flight.Spec.MaxAltitudeM);
+                _altGaugeFill.anchorMax = new Vector2(1f, Mathf.Clamp01(altM / ceilingM));
+            }
+
+            UpdateHeadingTape(heading);
+            if (_speedTapeArea != null) UpdateVerticalTape(speedKmh, 20f, _speedTickLabels, _speedCenterLabel);
+            if (_altTapeArea != null) UpdateVerticalTape(altM, 20f, _altTickLabels, _altCenterLabel);
 
             if (_windNeedle != null)
             {
@@ -605,31 +838,46 @@ namespace AeroTerra.UI
             if (_tempLabel != null)
                 _tempLabel.text = $"{GameManager.Instance.Settings.TemperatureC:0} °C";
 
-            if (_minimapHome != null)
+            if (_minimapOperator != null)
             {
-                // Unity world (0,0,0) IS the map's spawn origin (see BuildMinimap's
-                // remarks) — home's position relative to the drone is just the drone's
-                // own negated XZ position, no georeference lookup needed.
+                // GameManager.SpawnLocalPosition is the exact ground X/Z
+                // DroneOperatorBuilder plants the operator figure/beacon at — fixed for
+                // the whole flight, so it's read once and cached rather than every
+                // frame. NOT the same as world (0,0,0) whenever a Flying Conditions ▸
+                // Spawn Location preset offset the actual launch point away from the
+                // map's own default origin.
+                if (!_minimapOperatorPosCached)
+                {
+                    _minimapOperatorPosCached = true;
+                    _minimapOperatorGroundPos = GameManager.Instance != null
+                        ? GameManager.Instance.SpawnLocalPosition : Vector3.zero;
+                }
+
                 Vector3 pos = _flight.transform.position;
-                Vector2 homeOffsetM = new Vector2(-pos.x, -pos.z);
-                float homeDistM = homeOffsetM.magnitude;
+                // Landmarks are stored relative to the map's own origin (world XZ), so
+                // their re-basing below still needs "origin minus drone" specifically —
+                // kept separate from the operator's own offset, which uses the actual
+                // spawn point instead and can legitimately differ from world origin.
+                Vector2 originOffsetM = new Vector2(-pos.x, -pos.z);
+                Vector2 operatorOffsetM = new Vector2(_minimapOperatorGroundPos.x - pos.x, _minimapOperatorGroundPos.z - pos.z);
+                float operatorDistM = operatorOffsetM.magnitude;
 
                 float scale = MinimapRadiusPx / MinimapRangeM;
-                Vector2 raw = homeOffsetM * scale;
-                _minimapHome.anchoredPosition = raw.magnitude > MinimapRadiusPx
-                    ? raw.normalized * MinimapRadiusPx : raw;
+                Vector2 rawOperator = operatorOffsetM * scale;
+                _minimapOperator.anchoredPosition = rawOperator.magnitude > MinimapRadiusPx
+                    ? rawOperator.normalized * MinimapRadiusPx : rawOperator;
                 _minimapNose.localEulerAngles = new Vector3(0, 0, -heading);
-                _minimapDistLabel.text = homeDistM < 1000f
-                    ? $"HOME {homeDistM:0} m" : $"HOME {homeDistM / 1000f:0.0} km";
+                _minimapOperatorLabel.text = operatorDistM < 1000f
+                    ? $"OPERATOR {operatorDistM:0} m" : $"OPERATOR {operatorDistM / 1000f:0.0} km";
 
                 if (_minimapLandmarks != null)
                 {
                     // Landmark offsets are stored relative to the map origin (world XZ);
-                    // homeOffsetM is "origin minus drone," so adding it re-bases the same
-                    // offset onto "landmark minus drone" — the vector the marker needs.
+                    // originOffsetM is "origin minus drone," so adding it re-bases the
+                    // same offset onto "landmark minus drone" — the vector the marker needs.
                     for (int i = 0; i < _minimapLandmarks.Length; i++)
                     {
-                        Vector2 lmRaw = (_minimapLandmarkOffsetsM[i] + homeOffsetM) * scale;
+                        Vector2 lmRaw = (_minimapLandmarkOffsetsM[i] + originOffsetM) * scale;
                         _minimapLandmarks[i].anchoredPosition = lmRaw.magnitude > MinimapRadiusPx
                             ? lmRaw.normalized * MinimapRadiusPx : lmRaw;
                     }
@@ -643,10 +891,29 @@ namespace AeroTerra.UI
                 _fpsLabel.text = $"FPS {_fpsSmoothed:0}";
             }
 
+            if (_flightMessageTimer > 0f)
+            {
+                _flightMessageTimer -= Time.deltaTime;
+                float alpha = _flightMessageTimer > FlightMessageFadeSec
+                    ? 1f : Mathf.Clamp01(_flightMessageTimer / FlightMessageFadeSec);
+                var mc = _flightMessageLabel.color;
+                _flightMessageLabel.color = new Color(mc.r, mc.g, mc.b, alpha);
+                if (_flightMessageTimer <= 0f) _flightMessageLabel.gameObject.SetActive(false);
+            }
+
             float roll = NormalizeAngle(_flight.transform.eulerAngles.z);
             float pitch = NormalizeAngle(_flight.transform.eulerAngles.x);
-            _horizonLine.localEulerAngles = new Vector3(0, 0, -roll);
-            _horizonLine.anchoredPosition = new Vector2(0, Mathf.Clamp(-pitch * 0.6f, -25f, 25f));
+            if (_ladder != null)
+            {
+                _ladder.localEulerAngles = new Vector3(0, 0, -roll);
+                _ladder.anchoredPosition = new Vector2(0, Mathf.Clamp(-pitch * LadderPxPerDeg, -100f, 100f));
+            }
+            if (_horizonLine != null)
+            {
+                var cue = (RectTransform)_horizonLine.parent;
+                cue.localEulerAngles = new Vector3(0, 0, -roll);
+                cue.anchoredPosition = new Vector2(0, Mathf.Clamp(-pitch * 0.6f, -25f, 25f));
+            }
 
             bool powerEmpty = power != null && power.IsEmpty;
             // Battery-only: cold or hot air temperature derates thrust ceiling (see
@@ -682,6 +949,45 @@ namespace AeroTerra.UI
             {
                 _lowPowerBeepTimer = 0f; // next time it drops low, beep immediately
             }
+        }
+
+        /// <summary>Repositions the fixed pool of heading-tick labels every frame by their
+        /// signed angular delta from the current heading — see BuildHeadingTape's remarks.</summary>
+        private void UpdateHeadingTape(float heading)
+        {
+            if (_headingRibbon == null) return;
+            _headingCenterLabel.text = $"{heading:000}";
+
+            float ribbonWidth = _headingRibbon.rect.width;
+            float pxPerDeg = (ribbonWidth * 0.5f) / HeadingHalfWindowDeg;
+            for (int i = 0; i < _headingTickDegrees.Length; i++)
+            {
+                float delta = Mathf.DeltaAngle(heading, _headingTickDegrees[i]);
+                bool visible = Mathf.Abs(delta) <= HeadingHalfWindowDeg + 12f;
+                _headingTickLabels[i].gameObject.SetActive(visible);
+                if (visible)
+                    _headingTickLabels[i].rectTransform.anchoredPosition = new Vector2(delta * pxPerDeg, 0f);
+            }
+        }
+
+        /// <summary>Recomputes a 5-tick scrolling window (nearest step ± 2 steps) around
+        /// the live value — see BuildVerticalTape's remarks for why this fakes the scroll
+        /// via per-frame repositioning instead of a real masked-content scroll.</summary>
+        private static void UpdateVerticalTape(float value, float step, TMPro.TextMeshProUGUI[] ticks, TMPro.TextMeshProUGUI centerLabel)
+        {
+            const float spacingPx = 34f;
+            float baseVal = Mathf.Round(value / step) * step;
+            for (int i = 0; i < ticks.Length; i++)
+            {
+                int offsetIdx = i - ticks.Length / 2;
+                float tickVal = baseVal + offsetIdx * step;
+                bool visible = tickVal >= 0f;
+                ticks[i].gameObject.SetActive(visible);
+                if (!visible) continue;
+                ticks[i].text = $"{tickVal:0}";
+                ticks[i].rectTransform.anchoredPosition = new Vector2(0, (tickVal - value) / step * spacingPx);
+            }
+            centerLabel.text = $"{value:0}";
         }
     }
 }

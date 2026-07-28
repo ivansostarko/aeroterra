@@ -41,6 +41,10 @@ namespace AeroTerra.Core
         private AudioSource _pauseMusicSource;
         private AudioClip _parachuteOpenClip;
         private bool _parachuteSfxLoaded;
+        private AudioClip _powerFailureAlarmClip;
+        private bool _powerFailureSfxLoaded;
+        private AudioClip _droneHornClip;
+        private bool _droneHornSfxLoaded;
 
         private void Awake()
         {
@@ -428,6 +432,42 @@ namespace AeroTerra.Core
             if (_parachuteSfxLoaded) return;
             _parachuteSfxLoaded = true;
             _parachuteOpenClip = Resources.Load<AudioClip>("Audio/sfx/parachute/parachute_opening");
+        }
+
+        /// <summary>One-shot alarm played once, at the exact moment a drone's battery/
+        /// fuel hits empty and it starts tumbling (see DroneFlightController.
+        /// BeginPowerFailureFall) — a distinct "engine's dead, you're going down" cue,
+        /// separate from FlightHUD's repeating low-power beep (which fires earlier, while
+        /// power is still low but not yet empty). File: Assets/Resources/Audio/sfx/
+        /// warning/power-failure-alarm.mp3 — silently no-ops until one is dropped there,
+        /// same as every other missing clip in this file.</summary>
+        public void PlayPowerFailureAlarm(Vector3 worldPos)
+        {
+            EnsurePowerFailureSfxLoaded();
+            if (_powerFailureAlarmClip != null) AudioSource.PlayClipAtPoint(_powerFailureAlarmClip, worldPos, SfxVolume01);
+        }
+
+        private void EnsurePowerFailureSfxLoaded()
+        {
+            if (_powerFailureSfxLoaded) return;
+            _powerFailureSfxLoaded = true;
+            _powerFailureAlarmClip = Resources.Load<AudioClip>("Audio/sfx/warning/power-failure-alarm");
+        }
+
+        /// <summary>One-shot for the Horn loadout item (H key, DroneHornController) —
+        /// positional so it's audible from wherever the drone is when sounded. File:
+        /// Assets/Resources/Audio/sfx/drone/horn.mp3.</summary>
+        public void PlayDroneHorn(Vector3 worldPos)
+        {
+            EnsureDroneHornSfxLoaded();
+            if (_droneHornClip != null) AudioSource.PlayClipAtPoint(_droneHornClip, worldPos, SfxVolume01);
+        }
+
+        private void EnsureDroneHornSfxLoaded()
+        {
+            if (_droneHornSfxLoaded) return;
+            _droneHornSfxLoaded = true;
+            _droneHornClip = Resources.Load<AudioClip>("Audio/sfx/drone/horn");
         }
 
         /// <summary>

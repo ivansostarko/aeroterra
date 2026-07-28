@@ -24,6 +24,12 @@ namespace AeroTerra.Drone
         /// real weight only, purely descriptive like Comms.</summary>
         public const float AiSensorKg = 0.25f;
 
+        /// <summary>Weight of an equipped horn/speaker unit — a small onboard warning
+        /// horn (H key in flight, Assets/Resources/Audio/sfx/drone/horn.mp3, see
+        /// DroneHornController), lightest of the additional-loadout items since it's
+        /// just a small speaker, not a canister/pod/tank.</summary>
+        public const float HornKg = 0.08f;
+
         public static float CommsWeightKg(CommsType type) => type switch
         {
             CommsType.Radio => 0.15f,

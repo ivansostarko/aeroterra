@@ -797,16 +797,19 @@ namespace AeroTerra.UI
             SwitchToggle_(panel, $"Smoke Screen    +{LoadoutExtras.SmokeScreenKg:0.##} kg",
                     new Vector2(x0, 0.625f), new Vector2(x1, 0.670f),
                     _ctrl.Working.SmokeScreenEquipped, v => { _ctrl.SetSmokeScreen(v); RefreshLive(); }, 14);
-            SwitchToggle_(panel, $"Parachute    +{LoadoutExtras.ParachuteKg:0.##} kg",
+            SwitchToggle_(panel, $"Horn    +{LoadoutExtras.HornKg:0.##} kg",
                     new Vector2(x0, 0.565f), new Vector2(x1, 0.610f),
+                    _ctrl.Working.HornEquipped, v => { _ctrl.SetHorn(v); RefreshLive(); }, 14);
+            SwitchToggle_(panel, $"Parachute    +{LoadoutExtras.ParachuteKg:0.##} kg",
+                    new Vector2(x0, 0.505f), new Vector2(x1, 0.550f),
                     _ctrl.Working.ParachuteEquipped, v => { _ctrl.SetParachute(v); RefreshLive(); }, 14);
             SwitchToggle_(panel, $"AI Sensor    +{LoadoutExtras.AiSensorKg:0.##} kg",
-                    new Vector2(x0, 0.505f), new Vector2(x1, 0.550f),
+                    new Vector2(x0, 0.445f), new Vector2(x1, 0.490f),
                     _ctrl.Working.AiSensorEquipped, v => { _ctrl.SetAiSensor(v); RefreshLive(); }, 14);
 
-            Label(panel, "DRONE COMMUNICATION", 12, new Vector2(x0, 0.430f), new Vector2(x1, 0.465f),
+            Label(panel, "DRONE COMMUNICATION", 12, new Vector2(x0, 0.370f), new Vector2(x1, 0.405f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
-            BuildCommsCards(panel, x0, x1, 0.330f, 0.420f);
+            BuildCommsCards(panel, x0, x1, 0.270f, 0.360f);
         }
 
         private void BuildLoadoutFooter(Transform panel)
@@ -888,6 +891,7 @@ namespace AeroTerra.UI
                 ? _ctrl.Working.FuelL * FuelDensityForCapacity(spec, _ctrl.Working.FuelL)
                 : _ctrl.Working.BatteryWh / DensityForCapacity(spec, _ctrl.Working.BatteryWh);
             float extraKg = (_ctrl.Working.SmokeScreenEquipped ? LoadoutExtras.SmokeScreenKg : 0f)
+                          + (_ctrl.Working.HornEquipped ? LoadoutExtras.HornKg : 0f)
                           + LoadoutExtras.CommsWeightKg(_ctrl.Working.Comms)
                           + (_ctrl.Working.ParachuteEquipped ? LoadoutExtras.ParachuteKg : 0f)
                           + (_ctrl.Working.AiSensorEquipped ? LoadoutExtras.AiSensorKg : 0f);

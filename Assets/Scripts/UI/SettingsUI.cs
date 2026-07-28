@@ -644,6 +644,8 @@ namespace AeroTerra.UI
         private static string FriendlyActionName(string actionName) => actionName switch
         {
             "PayloadDrop" => "PAYLOAD DROP",
+            "PayloadSwitch" => "PAYLOAD SWITCH",
+            "Horn" => "HORN",
             "SmokeScreen" => "SMOKE SCREEN",
             "PhotoMode" => "PHOTO MODE",
             "DroneFlip" => "DRONE FLIP",
