@@ -20,3 +20,29 @@ MonoBehaviour:
   Longitude: 55.6000
   SpawnAltitudeMeters: 350
   SpawnHeadingDeg: 0
+  SpawnLocations:
+  - Name: Burj Khalifa
+    Latitude: 25.1972
+    Longitude: 55.2742
+    Description: Extreme vertical ascent mission
+    SpawnAltitudeMeters: 500
+  - Name: Burj Al Arab
+    Latitude: 25.141389
+    Longitude: 55.185278
+    Description: Coastal orbit and photography
+    SpawnAltitudeMeters: 500
+  - Name: Palm Jumeirah
+    Latitude: 25.118056
+    Longitude: 55.133333
+    Description: Long-distance coastal route
+    SpawnAltitudeMeters: 500
+  - Name: Dubai Marina
+    Latitude: 25.08135
+    Longitude: 55.144075
+    Description: Skyscraper canyon race
+    SpawnAltitudeMeters: 500
+  - Name: Museum of the Future
+    Latitude: 25.21912
+    Longitude: 55.2821
+    Description: Precision orbit challenge
+    SpawnAltitudeMeters: 500

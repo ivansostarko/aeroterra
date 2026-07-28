@@ -36,6 +36,8 @@ namespace AeroTerra.Input
         public InputAction ScreenshotAction { get; private set; }
         public InputAction ReplayAction { get; private set; }
         public InputAction PhotoModeAction { get; private set; }
+        public InputAction DroneFlipAction { get; private set; }
+        public InputAction ParachuteAction { get; private set; }
 
         /// <summary>Held-state helpers for the flight model (boost = sprint,
         /// brake = airbrake / hover-hold depending on airframe).</summary>
@@ -62,23 +64,17 @@ namespace AeroTerra.Input
                 .With("Positive", "<Keyboard>/upArrow").With("Negative", "<Keyboard>/downArrow");
             ThrottleAction.AddBinding("<Gamepad>/leftStick/y");
 
-            // Pitch ("fly forward/back"): W/S, plus Q as an extra alternate "forward" key
-            // stacked onto the same Positive part (Unity's composite parts accept more
-            // than one bound control — same "WASD + arrows both move" pattern, just Q
-            // added onto Positive instead of a whole second key pair). Gamepad right
-            // stick Y, mouse Y (scheme-gated in ReadFlightAxes) unchanged.
+            // Pitch ("fly forward/back"): W/S. Gamepad right stick Y, mouse Y
+            // (scheme-gated in ReadFlightAxes) unchanged.
             PitchAction = new InputAction("Pitch", InputActionType.Value);
             PitchAction.AddCompositeBinding("1DAxis")
-                .With("Positive", "<Keyboard>/w").With("Negative", "<Keyboard>/s")
-                .With("Positive", "<Keyboard>/q");
+                .With("Positive", "<Keyboard>/w").With("Negative", "<Keyboard>/s");
             PitchAction.AddBinding("<Gamepad>/rightStick/y");
 
-            // Roll ("fly left/right"): A/D, plus K as an extra alternate "right" key,
-            // same stacked-part pattern as Pitch's Q above. Gamepad right stick X unchanged.
+            // Roll ("fly left/right"): A/D. Gamepad right stick X unchanged.
             RollAction = new InputAction("Roll", InputActionType.Value);
             RollAction.AddCompositeBinding("1DAxis")
-                .With("Positive", "<Keyboard>/d").With("Negative", "<Keyboard>/a")
-                .With("Positive", "<Keyboard>/k");
+                .With("Positive", "<Keyboard>/d").With("Negative", "<Keyboard>/a");
             RollAction.AddBinding("<Gamepad>/rightStick/x");
 
             // Yaw: gamepad-only now — this control scheme has no keyboard left/right
@@ -133,12 +129,25 @@ namespace AeroTerra.Input
             PhotoModeAction = new InputAction("PhotoMode", InputActionType.Button, "<Keyboard>/f8");
             PhotoModeAction.AddBinding("<Gamepad>/dpad/down");
 
+            // Drone flip: a scripted barrel-roll trick, momentary press — not held.
+            // Right shoulder is the one gamepad button not already claimed (triggers
+            // are Boost/Brake, face buttons are Camera/Reset/PayloadDrop/SmokeScreen).
+            DroneFlipAction = new InputAction("DroneFlip", InputActionType.Button, "<Keyboard>/b");
+            DroneFlipAction.AddBinding("<Gamepad>/rightShoulder");
+
+            // Parachute: momentary press, deploys if equipped in the Workshop and above
+            // the safe-deploy altitude (see DroneFlightController.DeployParachute).
+            // Gamepad dpad/left is the one dpad face not already claimed (up=Replay,
+            // down=PhotoMode).
+            ParachuteAction = new InputAction("Parachute", InputActionType.Button, "<Keyboard>/g");
+            ParachuteAction.AddBinding("<Gamepad>/dpad/left");
+
             foreach (var a in AllActions()) a.Enable();
             ApplySavedOverrides();
         }
 
         public InputAction[] AllActions() => new[]
-            { ThrottleAction, PitchAction, RollAction, YawAction, PauseAction, CameraAction, ResetAction, PayloadDropAction, BoostAction, BrakeAction, SmokeScreenAction, ScreenshotAction, ReplayAction, PhotoModeAction };
+            { ThrottleAction, PitchAction, RollAction, YawAction, PauseAction, CameraAction, ResetAction, PayloadDropAction, BoostAction, BrakeAction, SmokeScreenAction, ScreenshotAction, ReplayAction, PhotoModeAction, DroneFlipAction, ParachuteAction };
 
         public void ApplyScheme(ControlScheme scheme)
         {

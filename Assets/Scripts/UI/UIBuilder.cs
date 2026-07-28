@@ -399,6 +399,39 @@ namespace AeroTerra.UI
             return toggle;
         }
 
+        /// <summary>Pill-style on/off switch — a colored track with a sliding thumb that
+        /// fills/moves on state change, far more visually distinct at a glance than
+        /// Toggle_'s small checkbox. Same Toggle-component-driven shape/API as Toggle_
+        /// (label left, control right, whole row clickable) so call sites read the same;
+        /// use this wherever a toggle deserves more visual weight (e.g. Workshop loadout
+        /// switches) and Toggle_ for dense settings lists.</summary>
+        public static Toggle SwitchToggle_(Transform parent, string label, Vector2 anchorMin, Vector2 anchorMax,
+            bool value, System.Action<bool> onChanged, float fontSize = 14)
+        {
+            var rt = Panel_(parent, "Switch_" + label, Color.clear, anchorMin, anchorMax);
+            Label(rt, label, fontSize, new Vector2(0f, 0f), new Vector2(0.78f, 1f), TextMain,
+                  TextAlignmentOptions.MidlineLeft);
+
+            var track = Panel_(rt, "Track", value ? Accent : PanelAlt,
+                                new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-54, -13), new Vector2(-2, 13));
+            var trackImg = track.GetComponent<Image>();
+            var thumb = Panel_(track, "Thumb", new Color(0.95f, 0.97f, 1f, 1f),
+                                new Vector2(value ? 0.55f : 0.05f, 0.14f), new Vector2(value ? 0.95f : 0.45f, 0.86f));
+
+            var toggle = rt.gameObject.AddComponent<Toggle>();
+            toggle.transition = Selectable.Transition.None; // visuals are hand-driven below, not Unity's default tint
+            toggle.targetGraphic = trackImg;
+            toggle.isOn = value;
+            toggle.onValueChanged.AddListener(v =>
+            {
+                trackImg.color = v ? Accent : PanelAlt;
+                thumb.anchorMin = new Vector2(v ? 0.55f : 0.05f, 0.14f);
+                thumb.anchorMax = new Vector2(v ? 0.95f : 0.45f, 0.86f);
+                onChanged?.Invoke(v);
+            });
+            return toggle;
+        }
+
         /// <summary>Row of mutually exclusive option buttons; highlights selection.</summary>
         public static void OptionRow<T>(Transform parent, T[] options, T current,
             Vector2 anchorMin, Vector2 anchorMax, System.Action<T> onPick,

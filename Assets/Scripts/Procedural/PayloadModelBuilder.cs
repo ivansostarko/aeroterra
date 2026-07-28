@@ -63,15 +63,22 @@ namespace AeroTerra.Procedural
         }
 
         /// <summary>Improvised-looking drop munition: stubby olive-drab canister with
-        /// oversized crude fins — the FPV-bomber-drone aesthetic (matches Hornet's flavor).</summary>
+        /// oversized crude fins — the FPV-bomber-drone aesthetic (matches Hornet's flavor).
+        /// Nose is a proper two-stage taper (wide cone base flush with the body, narrowing
+        /// to a sharp point) rather than the old single blunt sphere fuze, which sat
+        /// mostly buried inside the body's own rounded cap and never read as pointed.</summary>
         private static void BuildDropMunition(Transform store, Color body, Color accent)
         {
             var olive = DroneMeshBuilder.MakeMat(Color.Lerp(body, new Color(0.35f, 0.38f, 0.22f), 0.5f));
             var dark = DroneMeshBuilder.MakeMat(Color.Lerp(body, Color.black, 0.6f));
             DroneMeshBuilder.Part(PrimitiveType.Capsule, store, Vector3.zero,
                 new Vector3(0.058f, 0.145f, 0.058f), olive, new Vector3(90f, 0, 0), "Body");
-            DroneMeshBuilder.Part(PrimitiveType.Sphere, store, new Vector3(0, 0, 0.148f),
-                Vector3.one * 0.045f, dark, name: "NoseFuze");
+            DroneMeshBuilder.Part(PrimitiveType.Cylinder, store, new Vector3(0, 0, 0.185f),
+                new Vector3(0.046f, 0.032f, 0.046f), olive, new Vector3(90f, 0, 0), "NoseCone");
+            DroneMeshBuilder.Part(PrimitiveType.Cylinder, store, new Vector3(0, 0, 0.225f),
+                new Vector3(0.020f, 0.038f, 0.020f), dark, new Vector3(90f, 0, 0), "NoseTip");
+            DroneMeshBuilder.Part(PrimitiveType.Sphere, store, new Vector3(0, 0, 0.262f),
+                Vector3.one * 0.009f, dark, name: "NoseFuze");
             for (int f = 0; f < 4; f++)
                 DroneMeshBuilder.Part(PrimitiveType.Cube, store, new Vector3(0, 0, -0.15f),
                     new Vector3(0.008f, 0.07f, 0.05f), olive, new Vector3(0, 0, 45f + f * 90f), "Fin");

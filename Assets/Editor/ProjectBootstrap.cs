@@ -50,29 +50,96 @@ namespace AeroTerra.EditorTools
             // as bearing markers on the Flight HUD's NAV minimap (MapDefinition.Landmark) —
             // real-world coordinates, approximate (a few hundred meters of slack is fine at
             // minimap scale), named to match each city's Description text above.
+            // SpawnLocations are the selectable presets on Free Flight's Flying Conditions ▸
+            // SPAWN LOCATION tab — five real landmarks per city, each with its own
+            // recommended spawn altitude and a one-line mission-flavor description.
             CreateMap("london", "London", "United Kingdom", 51.5073, -0.1657, 350,
                 "Fly over the Thames, Tower Bridge, Canary Wharf and Westminster.", // Starting Spot: Hyde Park
+                new[]
+                {
+                    SpawnLocation("Tower Bridge", 51.5056, -0.0753, "Bridge fly-through challenge", 500),
+                    SpawnLocation("Palace of Westminster", 51.499167, -0.124722, "Landmark reconnaissance mission", 500),
+                    SpawnLocation("The O2", 51.502778, 0.003056, "Dome orbit and rooftop inspection", 500),
+                    SpawnLocation("Battersea Power Station", 51.481667, -0.144722, "Industrial inspection mission", 500),
+                    SpawnLocation("Canary Wharf", 51.505000, -0.022500, "High-rise slalom race", 500),
+                },
                 Landmark("Tower Bridge", 51.5055, -0.0754), Landmark("Big Ben", 51.5007, -0.1246));
             CreateMap("dubai", "Dubai", "United Arab Emirates", 24.8500, 55.6000, 350,
                 "Fly around Burj Khalifa, Palm Jumeirah and Dubai Marina.", // Starting Spot: Al Qudra Lakes
+                new[]
+                {
+                    SpawnLocation("Burj Khalifa", 25.197200, 55.274200, "Extreme vertical ascent mission", 500),
+                    SpawnLocation("Burj Al Arab", 25.141389, 55.185278, "Coastal orbit and photography", 500),
+                    SpawnLocation("Palm Jumeirah", 25.118056, 55.133333, "Long-distance coastal route", 500),
+                    SpawnLocation("Dubai Marina", 25.081350, 55.144075, "Skyscraper canyon race", 500),
+                    SpawnLocation("Museum of the Future", 25.219120, 55.282100, "Precision orbit challenge", 500),
+                },
                 Landmark("Burj Khalifa", 25.1972, 55.2744), Landmark("Palm Jumeirah", 25.1124, 55.1390));
             CreateMap("zagreb", "Zagreb", "Croatia", 45.8250, 16.0200, 350,
                 "Fly over Ban Jelačić Square, Zagreb Cathedral and the Sava riverfront.", // Starting Spot: Maksimir Park
+                new[]
+                {
+                    SpawnLocation("Zagreb Cathedral", 45.814632, 15.978783, "Cathedral orbit and photography", 500),
+                    SpawnLocation("Ban Jelačić Square", 45.813056, 15.977222, "City-centre navigation", 500),
+                    SpawnLocation("Maksimir Park", 45.829722, 16.020556, "Woodland terrain-following route", 500),
+                    SpawnLocation("Jarun Lake", 45.783333, 15.916667, "Water racing and rescue mission", 500),
+                    SpawnLocation("Medvedgrad", 45.869722, 15.941111, "Mountain ascent and castle approach", 500),
+                },
                 Landmark("Zagreb Cathedral", 45.8150, 15.9785), Landmark("Ban Jelačić Square", 45.8131, 15.9776));
             CreateMap("new-york", "New York", "United States", 40.7460, -73.8450, 350,
                 "Fly through Manhattan past the Empire State Building, Central Park and the Statue of Liberty.", // Starting Spot: Flushing Meadows–Corona Park
+                new[]
+                {
+                    SpawnLocation("Statue of Liberty", 40.689167, -74.044444, "Island approach and landmark orbit", 500),
+                    SpawnLocation("Brooklyn Bridge", 40.705700, -73.996400, "Bridge inspection and fly-under route", 500),
+                    SpawnLocation("Times Square", 40.757500, -73.985800, "Dense urban navigation", 500),
+                    SpawnLocation("Central Park", 40.782555, -73.965583, "Scenic low-altitude route", 500),
+                    SpawnLocation("One World Trade Center", 40.713056, -74.013333, "Vertical ascent and rooftop checkpoint", 500),
+                },
                 Landmark("Empire State Building", 40.7484, -73.9857), Landmark("Statue of Liberty", 40.6892, -74.0445));
             CreateMap("tokyo", "Tokyo", "Japan", 35.6720, 139.6977, 350,
                 "Fly over Tokyo Tower, Shibuya Crossing and the Imperial Palace grounds.", // Starting Spot: Yoyogi Park
+                new[]
+                {
+                    SpawnLocation("Tokyo Tower", 35.658611, 139.745556, "Tower orbit and ascent", 500),
+                    SpawnLocation("Tokyo Skytree", 35.710100, 139.810700, "Extreme-altitude checkpoint", 500),
+                    SpawnLocation("Shibuya Crossing", 35.659500, 139.700560, "Dense urban navigation", 500),
+                    SpawnLocation("Rainbow Bridge", 35.636389, 139.763611, "Bridge and waterfront race", 500),
+                    SpawnLocation("Tokyo Station", 35.680833, 139.766944, "Railway district inspection", 500),
+                },
                 Landmark("Tokyo Tower", 35.6586, 139.7454), Landmark("Shibuya Crossing", 35.6595, 139.7005));
             CreateMap("paris", "Paris", "France", 48.8624, 2.2490, 350,
                 "Fly past the Eiffel Tower, Arc de Triomphe and along the Seine.", // Starting Spot: Bois de Boulogne
+                new[]
+                {
+                    SpawnLocation("Eiffel Tower", 48.858222, 2.294500, "Vertical orbit and photography", 500),
+                    SpawnLocation("Arc de Triomphe", 48.873778, 2.295028, "Precision boulevard approach", 500),
+                    SpawnLocation("Louvre Museum", 48.861100, 2.335800, "Courtyard reconnaissance route", 500),
+                    SpawnLocation("Sacré-Cœur", 48.886452, 2.343121, "Elevated city panorama mission", 500),
+                    SpawnLocation("La Défense", 48.891667, 2.240833, "Modern high-rise racing zone", 500),
+                },
                 Landmark("Eiffel Tower", 48.8584, 2.2945), Landmark("Arc de Triomphe", 48.8738, 2.2950));
             CreateMap("riyadh", "Riyadh", "Saudi Arabia", 24.8000, 46.7000, 350,
                 "Fly over Kingdom Centre Tower, Al Faisaliah and the King Abdullah Financial District.", // Starting Spot: King Abdullah Park
+                new[]
+                {
+                    SpawnLocation("Kingdom Centre", 24.711300, 46.674400, "Sky Bridge orbit mission", 500),
+                    SpawnLocation("Al Faisaliah Tower", 24.690280, 46.685280, "Vertical tower inspection", 500),
+                    SpawnLocation("Masmak Fort", 24.631111, 46.713306, "Historic-site reconnaissance", 500),
+                    SpawnLocation("King Abdullah Financial District", 24.762806, 46.640306, "Futuristic skyscraper race", 500),
+                    SpawnLocation("National Museum of Saudi Arabia", 24.647222, 46.710833, "Cultural district photography route", 500),
+                },
                 Landmark("Kingdom Centre", 24.7116, 46.6753), Landmark("Al Faisaliah Tower", 24.6914, 46.6851));
             CreateMap("barcelona", "Barcelona", "Spain", 41.3880, 2.1870, 350,
                 "Fly over Sagrada Família, Park Güell and the Barcelona waterfront.", // Starting Spot: Parc de la Ciutadella
+                new[]
+                {
+                    SpawnLocation("Sagrada Família", 41.403690, 2.174330, "Landmark orbit and photography", 500),
+                    SpawnLocation("Park Güell", 41.413611, 2.152778, "Terrain-following scenic route", 500),
+                    SpawnLocation("Montjuïc", 41.364167, 2.160833, "Hill climb and descent challenge", 500),
+                    SpawnLocation("Arc de Triomf", 41.390833, 2.180556, "Precision gate fly-through", 500),
+                    SpawnLocation("Torre Glòries", 41.403333, 2.189444, "High-rise orbit and urban race", 500),
+                },
                 Landmark("Sagrada Família", 41.4036, 2.1744), Landmark("Park Güell", 41.4145, 2.1527));
 
             AssetDatabase.SaveAssets();
@@ -81,8 +148,12 @@ namespace AeroTerra.EditorTools
         private static MapDefinition.Landmark Landmark(string name, double lat, double lon) =>
             new MapDefinition.Landmark { Name = name, Latitude = lat, Longitude = lon };
 
+        private static MapDefinition.SpawnLocation SpawnLocation(string name, double lat, double lon, string description, double altM) =>
+            new MapDefinition.SpawnLocation { Name = name, Latitude = lat, Longitude = lon, Description = description, SpawnAltitudeMeters = altM };
+
         private static void CreateMap(string id, string displayName, string country,
-            double lat, double lon, double spawnAltM, string description, params MapDefinition.Landmark[] landmarks)
+            double lat, double lon, double spawnAltM, string description,
+            MapDefinition.SpawnLocation[] spawnLocations, params MapDefinition.Landmark[] landmarks)
         {
             var path = $"{MapDir}/{id}.asset";
             if (AssetDatabase.LoadAssetAtPath<MapDefinition>(path) != null) return; // don't clobber edits
@@ -91,6 +162,7 @@ namespace AeroTerra.EditorTools
             map.Id = id; map.DisplayName = displayName; map.Country = country;
             map.Latitude = lat; map.Longitude = lon; map.SpawnAltitudeMeters = spawnAltM;
             map.Description = description;
+            map.SpawnLocations = spawnLocations ?? System.Array.Empty<MapDefinition.SpawnLocation>();
             map.Landmarks = landmarks;
             AssetDatabase.CreateAsset(map, path);
         }
@@ -163,6 +235,7 @@ namespace AeroTerra.EditorTools
             strike.CruisePowerW = 500f; strike.PowerPerThrottleW = 1100f;
             strike.PayloadOptionsKg = new[] { 0f, 1f, 2f, 3f };
             strike.PayloadTypeName = "Warhead mass (simulated)";
+            strike.PayloadKind = PayloadKind.Warhead;
             strike.PayloadHardpoints = 1;
             strike.HasFrontCamera = true; strike.HasBackCamera = true; strike.HasThermalCamera = true;
             strike.DefaultBodyColor = new Color(0.25f, 0.28f, 0.24f);
@@ -192,6 +265,7 @@ namespace AeroTerra.EditorTools
             loiter.CruisePowerW = 320f; loiter.PowerPerThrottleW = 900f;
             loiter.PayloadOptionsKg = new[] { 5f, 10f, 15f };
             loiter.PayloadTypeName = "Warhead mass (simulated)";
+            loiter.PayloadKind = PayloadKind.Warhead;
             loiter.PayloadHardpoints = 1;
             loiter.HasFrontCamera = true; loiter.HasBackCamera = true; loiter.HasThermalCamera = false;
             loiter.DefaultBodyColor = new Color(0.72f, 0.68f, 0.55f);   // desert tan composite
@@ -216,8 +290,11 @@ namespace AeroTerra.EditorTools
             fpv.BatteryOptionsWh = new[] { 90f, 150f, 220f };
             fpv.CruisePowerW = 160f; fpv.PowerPerThrottleW = 650f;
             fpv.PayloadOptionsKg = new[] { 0f, 0.5f, 1f, 1.5f };
-            fpv.PayloadTypeName = "Drop munition (simulated)";
+            fpv.PayloadTypeName = "Drop Munition";
             fpv.PayloadKind = PayloadKind.DropAmmunition;
+            // Hornet can be built either way — player picks in the Workshop's
+            // AMMUNITION PAYLOAD category picker (see WorkshopUI.BuildLoadoutPayload).
+            fpv.AvailablePayloadKinds = new[] { PayloadKind.DropAmmunition, PayloadKind.Warhead };
             fpv.PayloadHardpoints = 1;
             // Only airframe in the roster with a second camera: nose FPV feed plus a
             // belly-facing view (CamMode.Bottom) used to line up the drop.
@@ -352,6 +429,7 @@ namespace AeroTerra.EditorTools
             jet.CruisePowerW = 1500f; jet.PowerPerThrottleW = 2600f;
             jet.PayloadOptionsKg = new[] { 8f, 12f, 16f };
             jet.PayloadTypeName = "Warhead mass (simulated)";
+            jet.PayloadKind = PayloadKind.Warhead;
             jet.PayloadHardpoints = 1;
             jet.HasFrontCamera = true; jet.HasBackCamera = false; jet.HasThermalCamera = false;
             jet.DefaultBodyColor = new Color(0.16f, 0.17f, 0.19f);     // gunmetal
@@ -441,8 +519,8 @@ namespace AeroTerra.EditorTools
             griffin.BatteryOptionsWh = new[] { 1100f, 1700f, 2300f };
             griffin.CruisePowerW = 450f; griffin.PowerPerThrottleW = 1200f;
             griffin.PayloadOptionsKg = new[] { 0f, 2f, 4f, 6f };
-            griffin.PayloadTypeName = "Cargo pod";
-            griffin.PayloadKind = PayloadKind.Cargo;
+            griffin.PayloadTypeName = "Guided munitions (simulated)";
+            griffin.PayloadKind = PayloadKind.GuidedAmmunition;
             griffin.PayloadHardpoints = 1;
             griffin.HasFrontCamera = true; griffin.HasBackCamera = true; griffin.HasThermalCamera = true;
             griffin.DefaultBodyColor = new Color(0.85f, 0.86f, 0.88f);    // fleet white/gray

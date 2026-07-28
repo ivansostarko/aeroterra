@@ -49,6 +49,7 @@ MonoBehaviour:
   - 12
   - 16
   PayloadTypeName: Warhead mass (simulated)
+  PayloadKind: 1
   PayloadHardpoints: 1
   HasFrontCamera: 1
   HasBackCamera: 0

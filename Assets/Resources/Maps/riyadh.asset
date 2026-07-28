@@ -21,3 +21,29 @@ MonoBehaviour:
   Longitude: 46.7000
   SpawnAltitudeMeters: 350
   SpawnHeadingDeg: 0
+  SpawnLocations:
+  - Name: Kingdom Centre
+    Latitude: 24.7113
+    Longitude: 46.6744
+    Description: Sky Bridge orbit mission
+    SpawnAltitudeMeters: 500
+  - Name: Al Faisaliah Tower
+    Latitude: 24.69028
+    Longitude: 46.68528
+    Description: Vertical tower inspection
+    SpawnAltitudeMeters: 500
+  - Name: Masmak Fort
+    Latitude: 24.631111
+    Longitude: 46.713306
+    Description: Historic-site reconnaissance
+    SpawnAltitudeMeters: 500
+  - Name: King Abdullah Financial District
+    Latitude: 24.762806
+    Longitude: 46.640306
+    Description: Futuristic skyscraper race
+    SpawnAltitudeMeters: 500
+  - Name: National Museum of Saudi Arabia
+    Latitude: 24.647222
+    Longitude: 46.710833
+    Description: Cultural district photography route
+    SpawnAltitudeMeters: 500

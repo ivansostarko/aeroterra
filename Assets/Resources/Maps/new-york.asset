@@ -21,3 +21,29 @@ MonoBehaviour:
   Longitude: -73.8450
   SpawnAltitudeMeters: 350
   SpawnHeadingDeg: 0
+  SpawnLocations:
+  - Name: Statue of Liberty
+    Latitude: 40.689167
+    Longitude: -74.044444
+    Description: Island approach and landmark orbit
+    SpawnAltitudeMeters: 500
+  - Name: Brooklyn Bridge
+    Latitude: 40.7057
+    Longitude: -73.9964
+    Description: Bridge inspection and fly-under route
+    SpawnAltitudeMeters: 500
+  - Name: Times Square
+    Latitude: 40.7575
+    Longitude: -73.9858
+    Description: Dense urban navigation
+    SpawnAltitudeMeters: 500
+  - Name: Central Park
+    Latitude: 40.782555
+    Longitude: -73.965583
+    Description: Scenic low-altitude route
+    SpawnAltitudeMeters: 500
+  - Name: One World Trade Center
+    Latitude: 40.713056
+    Longitude: -74.013333
+    Description: Vertical ascent and rooftop checkpoint
+    SpawnAltitudeMeters: 500

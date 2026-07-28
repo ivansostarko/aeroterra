@@ -173,7 +173,7 @@ namespace AeroTerra.UI
             _militaryPayload = _flight.Spec.IsMilitaryClass;
             if (_hardpoints <= 0 || _flight.Spec.MaxPayloadKg <= 0f) return;
 
-            var kind = _flight.Spec.PayloadKind;
+            var kind = _flight.EffectivePayloadKind;
             _payloadPipsRow = Panel_(bar, "PayloadPipsRow", Color.clear, new Vector2(0.80f, 0f), new Vector2(0.98f, 0.48f));
             float slot = 1f / _hardpoints;
             _payloadPips = new UnityEngine.UI.Image[_hardpoints];

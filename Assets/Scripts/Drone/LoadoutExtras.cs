@@ -6,13 +6,23 @@ namespace AeroTerra.Drone
     /// to be purely cosmetic before skins made it a real customization axis.</summary>
     public enum CommsType { Radio, FiveG, AnalogWire }
 
-    /// <summary>Static data for the two "additional loadout" slots every drone can
-    /// equip in the Workshop: a smoke-screen canister and a comms radio.</summary>
+    /// <summary>Static data for the "additional loadout" slots every drone can equip
+    /// in the Workshop: a smoke-screen canister, a comms radio, a recovery parachute,
+    /// and an AI sensor pod.</summary>
     public static class LoadoutExtras
     {
         /// <summary>Weight of an equipped smoke-screen canister — when equipped, the
         /// airframe trails a continuous colored smoke plume in flight (DroneFactory).</summary>
         public const float SmokeScreenKg = 0.35f;
+
+        /// <summary>Weight of an equipped recovery parachute — canister, lines and
+        /// deployment mechanism, real weight only (no deploy-on-crash behavior yet),
+        /// same "descriptive loadout choice" precedent Comms already established.</summary>
+        public const float ParachuteKg = 0.45f;
+
+        /// <summary>Weight of an equipped AI sensor pod — a compute/sensor payload,
+        /// real weight only, purely descriptive like Comms.</summary>
+        public const float AiSensorKg = 0.25f;
 
         public static float CommsWeightKg(CommsType type) => type switch
         {

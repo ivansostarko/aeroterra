@@ -20,3 +20,29 @@ MonoBehaviour:
   Longitude: 2.2490
   SpawnAltitudeMeters: 350
   SpawnHeadingDeg: 0
+  SpawnLocations:
+  - Name: Eiffel Tower
+    Latitude: 48.858222
+    Longitude: 2.2945
+    Description: Vertical orbit and photography
+    SpawnAltitudeMeters: 500
+  - Name: Arc de Triomphe
+    Latitude: 48.873778
+    Longitude: 2.295028
+    Description: Precision boulevard approach
+    SpawnAltitudeMeters: 500
+  - Name: Louvre Museum
+    Latitude: 48.8611
+    Longitude: 2.3358
+    Description: Courtyard reconnaissance route
+    SpawnAltitudeMeters: 500
+  - Name: Sacré-Cœur
+    Latitude: 48.886452
+    Longitude: 2.343121
+    Description: Elevated city panorama mission
+    SpawnAltitudeMeters: 500
+  - Name: La Défense
+    Latitude: 48.891667
+    Longitude: 2.240833
+    Description: Modern high-rise racing zone
+    SpawnAltitudeMeters: 500

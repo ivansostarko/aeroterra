@@ -43,7 +43,8 @@ MonoBehaviour:
   - 2
   - 4
   - 6
-  PayloadTypeName: Cargo pod
+  PayloadTypeName: Guided munitions (simulated)
+  PayloadKind: 2
   PayloadHardpoints: 1
   HasFrontCamera: 1
   HasBackCamera: 1

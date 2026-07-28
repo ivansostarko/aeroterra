@@ -131,6 +131,27 @@ namespace AeroTerra.Drone
         public string PayloadTypeName = "Cargo pod";
         public PayloadKind PayloadKind = PayloadKind.Cargo;
 
+        /// <summary>Optional second (or more) selectable payload category for drones that
+        /// can be built either way — empty (the default, and what every pre-existing
+        /// .asset deserializes to) means "just PayloadKind above, no picker shown", same
+        /// single-fixed-category behavior every drone had before this field existed. When
+        /// it has 2+ entries (currently only AT-R4 Hornet: DropAmmunition/Warhead),
+        /// WorkshopUI shows a category-picker row and the player's choice is saved to
+        /// CustomDroneData.SelectedPayloadKind — see WorkshopController.SetPayloadKind and
+        /// DroneFactory.Spawn's EffectivePayloadKind resolution.</summary>
+        public PayloadKind[] AvailablePayloadKinds = System.Array.Empty<PayloadKind>();
+
+        /// <summary>Display name for a payload category — used by WorkshopUI's
+        /// multi-category picker (see AvailablePayloadKinds above) where a single fixed
+        /// PayloadTypeName string can't work since the category itself changes per pick.</summary>
+        public static string PayloadKindLabel(PayloadKind kind) => kind switch
+        {
+            PayloadKind.Warhead => "Warhead Mass",
+            PayloadKind.GuidedAmmunition => "Guided Ammunition",
+            PayloadKind.DropAmmunition => "Drop Ammunition",
+            _ => "Cargo",
+        };
+
         /// <summary>Number of physical mounts the drop mechanic represents (e.g. the
         /// Kestrel's four underwing munitions vs. everyone else's single belly
         /// mount/pod). Where the model groups its stores as "Store*" children of
@@ -264,38 +285,53 @@ namespace AeroTerra.Drone
         /// <summary>Fuel-tank equivalent of RangeKm.</summary>
         public float FuelRangeKm(float capacityL) => FuelEnduranceMinutes(capacityL) / 60f * MaxSpeedKmh;
 
-        /// <summary>Four selectable power-cell tiers, synthesized from this drone's own
+        private static readonly string[] BatteryTierNames =
+            { "Light", "Compact", "Standard", "Balanced", "Performance", "Extended", "Long Range", "Max Range" };
+        private static readonly float[] BatteryTierDensities = { 235f, 222f, 209f, 196f, 183f, 170f, 157f, 145f };
+
+        /// <summary>Eight selectable power-cell tiers, synthesized from this drone's own
         /// BatteryOptionsWh/MaxBatteryWh — every drone gets a genuinely different set
         /// since it's derived from data that already varies per airframe, with no need
-        /// to hand-author 4 variants × 11 drones. Light = least weight/shortest flight,
-        /// Max Range = heaviest/longest — a real trade-off, not just a label.</summary>
+        /// to hand-author 8 variants × 12 drones. Evenly spans the same Light..Max Range
+        /// capacity range the old 4-tier version used (stock*0.6 .. MaxBatteryWh), just
+        /// with finer steps in between; Light = least weight/shortest flight, Max Range =
+        /// heaviest/longest — a real trade-off, not just a label. Energy density falls
+        /// smoothly from Light (small, premium, efficient cells) to Max Range (bulk cells,
+        /// more mass per Wh), same trend the original 4-tier curve had.</summary>
         public BatteryVariant[] GetBatteryVariants()
         {
             float stock = BatteryOptionsWh != null && BatteryOptionsWh.Length > 0 ? BatteryOptionsWh[0] : 500f;
             float max = MaxBatteryWh > 0f ? MaxBatteryWh : stock;
-            float mid = Mathf.Lerp(stock, max, 0.5f);
-            return new[]
+            float low = stock * 0.6f;
+            int n = BatteryTierNames.Length;
+            var variants = new BatteryVariant[n];
+            for (int i = 0; i < n; i++)
             {
-                new BatteryVariant("Light", stock * 0.6f, 230f),
-                new BatteryVariant("Standard", stock, 180f),
-                new BatteryVariant("Extended", mid, 165f),
-                new BatteryVariant("Max Range", max, 150f),
-            };
+                float capacity = Mathf.Lerp(low, max, i / (float)(n - 1));
+                variants[i] = new BatteryVariant(BatteryTierNames[i], capacity, BatteryTierDensities[i]);
+            }
+            return variants;
         }
+
+        private static readonly string[] FuelTierNames =
+            { "Light Tank", "Compact Tank", "Standard Tank", "Balanced Tank",
+              "Performance Tank", "Extended Tank", "Long Range Tank", "Max Range Tank" };
+        private static readonly float[] FuelTierDensities = { 0.68f, 0.695f, 0.71f, 0.725f, 0.74f, 0.755f, 0.775f, 0.80f };
 
         /// <summary>Fuel-tank equivalent of GetBatteryVariants(), for PowerSystemType.Fuel airframes.</summary>
         public FuelVariant[] GetFuelVariants()
         {
             float stock = FuelOptionsL != null && FuelOptionsL.Length > 0 ? FuelOptionsL[0] : 8f;
             float max = MaxFuelL > 0f ? MaxFuelL : stock;
-            float mid = Mathf.Lerp(stock, max, 0.5f);
-            return new[]
+            float low = stock * 0.6f;
+            int n = FuelTierNames.Length;
+            var variants = new FuelVariant[n];
+            for (int i = 0; i < n; i++)
             {
-                new FuelVariant("Light Tank", stock * 0.6f, 0.68f),
-                new FuelVariant("Standard Tank", stock, 0.74f),
-                new FuelVariant("Extended Tank", mid, 0.76f),
-                new FuelVariant("Max Range Tank", max, 0.80f),
-            };
+                float capacity = Mathf.Lerp(low, max, i / (float)(n - 1));
+                variants[i] = new FuelVariant(FuelTierNames[i], capacity, FuelTierDensities[i]);
+            }
+            return variants;
         }
 
         /// <summary>Thrust-to-weight ratio at empty mass (no payload) — above 1.0 means it can climb vertically.</summary>

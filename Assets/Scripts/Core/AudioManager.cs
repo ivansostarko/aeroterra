@@ -30,12 +30,17 @@ namespace AeroTerra.Core
         private AudioClip _buttonClickClip, _buttonHoverClip;
         private bool _uiSfxLoaded;
         private AudioClip _bombDropClip, _bombExplosionClip;
+        private AudioClip _lowExplosionClip, _mediumExplosionClip, _largeExplosionClip;
         private bool _bombSfxLoaded;
+        private AudioClip _droneCrashClip;
+        private bool _explosionsSfxLoaded;
         private AudioSource _voiceSource;
         private AudioSource _warningSfxSource;
         private AudioClip _lowPowerClip;
         private bool _warningSfxLoaded;
         private AudioSource _pauseMusicSource;
+        private AudioClip _parachuteOpenClip;
+        private bool _parachuteSfxLoaded;
 
         private void Awake()
         {
@@ -365,6 +370,64 @@ namespace AeroTerra.Core
             _bombSfxLoaded = true;
             _bombDropClip = Resources.Load<AudioClip>("Audio/sfx/bomb/bomb-drop");
             _bombExplosionClip = Resources.Load<AudioClip>("Audio/sfx/bomb/bomb-explosion");
+            _lowExplosionClip = Resources.Load<AudioClip>("Audio/sfx/bomb/low_explosion");
+            _mediumExplosionClip = Resources.Load<AudioClip>("Audio/sfx/bomb/medium_explosion");
+            _largeExplosionClip = Resources.Load<AudioClip>("Audio/sfx/bomb/large_explosion");
+        }
+
+        /// <summary>Extra one-shot layered on top of PlayBombExplosion for the drone's
+        /// own hard-crash sequence (DroneFlightController.OnCollisionEnter) — a distinct,
+        /// heavier "the whole airframe just went down" sound on top of the generic blast
+        /// clip, not a replacement for it. File: Assets/Resources/Audio/sfx/explosions/
+        /// drone_crash.mp3.</summary>
+        public void PlayDroneCrashExplosion(Vector3 worldPos)
+        {
+            EnsureExplosionsSfxLoaded();
+            if (_droneCrashClip != null) AudioSource.PlayClipAtPoint(_droneCrashClip, worldPos, SfxVolume01);
+        }
+
+        private void EnsureExplosionsSfxLoaded()
+        {
+            if (_explosionsSfxLoaded) return;
+            _explosionsSfxLoaded = true;
+            _droneCrashClip = Resources.Load<AudioClip>("Audio/sfx/explosions/drone_crash");
+        }
+
+        /// <summary>Weight-tiered dropped-payload explosion — same 0.6/1.1 kg thresholds
+        /// PayloadDropper.DroppedPayloadImpact.BaseBlastScale uses for the visual blast
+        /// size, so the audio and the fireball scale together: a small low_explosion clip
+        /// for a light munition, medium_explosion around 1 kg, large_explosion for
+        /// anything heavier. Falls back to the flat bomb-explosion clip if massKg is 0
+        /// (not recorded) or a tiered clip hasn't been imported yet, so this never goes
+        /// silent even before the new assets are in place.</summary>
+        public void PlayTieredExplosion(Vector3 worldPos, float pitch, float massKg)
+        {
+            EnsureBombSfxLoaded();
+            AudioClip clip = massKg switch
+            {
+                <= 0f => _bombExplosionClip,
+                <= 0.6f => _lowExplosionClip,
+                <= 1.1f => _mediumExplosionClip,
+                _ => _largeExplosionClip,
+            };
+            clip = clip != null ? clip : _bombExplosionClip;
+            if (clip != null) PlayPitchedOneShot(clip, worldPos, SfxVolume01, pitch);
+        }
+
+        /// <summary>One-shot for the Parachute loadout item opening in flight (G key,
+        /// ParachuteController) — positional so it's audible from wherever the drone is
+        /// when it deploys. File: Assets/Resources/Audio/sfx/parachute/parachute_opening.mp3.</summary>
+        public void PlayParachuteOpen(Vector3 worldPos)
+        {
+            EnsureParachuteSfxLoaded();
+            if (_parachuteOpenClip != null) AudioSource.PlayClipAtPoint(_parachuteOpenClip, worldPos, SfxVolume01);
+        }
+
+        private void EnsureParachuteSfxLoaded()
+        {
+            if (_parachuteSfxLoaded) return;
+            _parachuteSfxLoaded = true;
+            _parachuteOpenClip = Resources.Load<AudioClip>("Audio/sfx/parachute/parachute_opening");
         }
 
         /// <summary>

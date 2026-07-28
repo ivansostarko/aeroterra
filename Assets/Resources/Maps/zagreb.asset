@@ -20,3 +20,29 @@ MonoBehaviour:
   Longitude: 16.0200
   SpawnAltitudeMeters: 350
   SpawnHeadingDeg: 0
+  SpawnLocations:
+  - Name: Zagreb Cathedral
+    Latitude: 45.814632
+    Longitude: 15.978783
+    Description: Cathedral orbit and photography
+    SpawnAltitudeMeters: 500
+  - Name: Ban Jelačić Square
+    Latitude: 45.813056
+    Longitude: 15.977222
+    Description: City-centre navigation
+    SpawnAltitudeMeters: 500
+  - Name: Maksimir Park
+    Latitude: 45.829722
+    Longitude: 16.020556
+    Description: Woodland terrain-following route
+    SpawnAltitudeMeters: 500
+  - Name: Jarun Lake
+    Latitude: 45.783333
+    Longitude: 15.916667
+    Description: Water racing and rescue mission
+    SpawnAltitudeMeters: 500
+  - Name: Medvedgrad
+    Latitude: 45.869722
+    Longitude: 15.941111
+    Description: Mountain ascent and castle approach
+    SpawnAltitudeMeters: 500

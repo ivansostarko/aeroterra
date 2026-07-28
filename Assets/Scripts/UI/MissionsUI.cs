@@ -19,19 +19,23 @@ namespace AeroTerra.UI
 
         private readonly struct Category
         {
-            public readonly string Id, DisplayName, ArtFile;
-            public Category(string id, string displayName, string artFile)
+            public readonly string Id, DisplayName, ArtFile, BgFile;
+            public Category(string id, string displayName, string artFile, string bgFile)
             {
-                Id = id; DisplayName = displayName; ArtFile = artFile;
+                Id = id; DisplayName = displayName; ArtFile = artFile; BgFile = bgFile;
             }
         }
 
+        // BgFile is the full-screen background shown on that category's detail
+        // screen (Images/Backgrounds/main-menu/slider_N) — distinct from ArtFile,
+        // the small card-thumbnail art already used on the hub (Images/Backgrounds/
+        // missions/*).
         private static readonly Category[] Categories =
         {
-            new Category("training", "TRAINING", "training"),
-            new Category("cargo", "CARGO DELIVERY", "cargo"),
-            new Category("combat", "COMBAT MISSIONS", "combat"),
-            new Category("racing", "RACING", "racing"),
+            new Category("training", "TRAINING", "training", "slider_7"),
+            new Category("cargo", "CARGO DELIVERY", "cargo", "slider_8"),
+            new Category("combat", "COMBAT MISSIONS", "combat", "slider_9"),
+            new Category("racing", "RACING", "racing", "slider_10"),
         };
 
         private RectTransform _root;
@@ -67,6 +71,11 @@ namespace AeroTerra.UI
             Clear();
             _screen = Screen.Hub;
             _root = Panel_(Canvas.transform, "Missions_Hub", Bg, Vector2.zero, Vector2.one);
+
+            _root.gameObject.AddComponent<BackgroundSlider>().Init(_root,
+                new[] { "Images/Backgrounds/main-menu/slider_6" });
+            Panel_(_root, "Scrim", new Color(0f, 0f, 0f, 0.55f), Vector2.zero, Vector2.one);
+
             BackButton_(_root, new Vector2(0.02f, 0.90f), new Vector2(0.075f, 0.965f), GoBack);
             Label(_root, "MISSIONS — SELECT MODE", 44, new Vector2(0.10f, 0.88f), new Vector2(0.95f, 0.97f),
                   TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
@@ -132,6 +141,11 @@ namespace AeroTerra.UI
             Clear();
             _screen = Screen.Detail;
             _root = Panel_(Canvas.transform, "Missions_Detail", Bg, Vector2.zero, Vector2.one);
+
+            _root.gameObject.AddComponent<BackgroundSlider>().Init(_root,
+                new[] { "Images/Backgrounds/main-menu/" + _selected.BgFile });
+            Panel_(_root, "Scrim", new Color(0f, 0f, 0f, 0.55f), Vector2.zero, Vector2.one);
+
             BackButton_(_root, new Vector2(0.02f, 0.90f), new Vector2(0.075f, 0.965f), GoBack);
 
             Label(_root, _selected.DisplayName, 44, new Vector2(0.05f, 0.56f), new Vector2(0.95f, 0.66f),

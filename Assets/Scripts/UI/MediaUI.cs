@@ -21,6 +21,7 @@ namespace AeroTerra.UI
         private System.Action _onBack;
         private int _tab; // 0 = screenshots, 1 = recordings
         private string _pendingDeletePng, _pendingDeleteJson; // non-null while the delete-confirm modal is up
+        private string _viewingImagePng; // non-null while the full-size image viewer modal is up
 
         private Canvas Canvas => GetComponent<MainMenuUI>().Canvas;
 
@@ -30,6 +31,7 @@ namespace AeroTerra.UI
             _tab = 0;
             _pendingDeletePng = null;
             _pendingDeleteJson = null;
+            _viewingImagePng = null;
             Build();
         }
 
@@ -37,7 +39,9 @@ namespace AeroTerra.UI
         {
             if (_root == null) return;
             var im = AeroTerra.Input.InputManager.Instance;
-            if (im != null && im.PauseAction.WasPressedThisFrame()) GoBack();
+            if (im == null || !im.PauseAction.WasPressedThisFrame()) return;
+            if (_viewingImagePng != null) CloseImageViewer();
+            else GoBack();
         }
 
         private void GoBack()
@@ -50,6 +54,10 @@ namespace AeroTerra.UI
         {
             Clear();
             _root = Panel_(Canvas.transform, "Media", Bg, Vector2.zero, Vector2.one);
+
+            _root.gameObject.AddComponent<BackgroundSlider>().Init(_root,
+                new[] { "Images/Backgrounds/main-menu/slider_5" });
+            Panel_(_root, "Scrim", new Color(0f, 0f, 0f, 0.55f), Vector2.zero, Vector2.one);
 
             BackButton_(_root, new Vector2(0.02f, 0.90f), new Vector2(0.075f, 0.965f), GoBack);
             var title = Label(_root, "MEDIA", 40, new Vector2(0.10f, 0.88f), new Vector2(0.95f, 0.965f),
@@ -71,6 +79,7 @@ namespace AeroTerra.UI
             else BuildRecordingsTab(content);
 
             if (_pendingDeletePng != null) BuildDeleteConfirmOverlay();
+            if (_viewingImagePng != null) BuildImageViewerOverlay();
         }
 
         // ---------------------------------------------------------------- screenshots
@@ -189,10 +198,48 @@ namespace AeroTerra.UI
             var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
             entry.callback.AddListener(data =>
             {
-                if (((PointerEventData)data).button == PointerEventData.InputButton.Right) OpenCtx();
+                var button = ((PointerEventData)data).button;
+                if (button == PointerEventData.InputButton.Right) OpenCtx();
+                else if (button == PointerEventData.InputButton.Left) { _viewingImagePng = pngPath; Build(); }
             });
             trigger.triggers.Add(entry);
         }
+
+        /// <summary>Full-size lightbox for the clicked screenshot — dark backdrop,
+        /// aspect-correct image, click anywhere outside the image (or the ✕/Esc) to
+        /// dismiss. Same staged-field + rebuild pattern as BuildDeleteConfirmOverlay.</summary>
+        private void BuildImageViewerOverlay()
+        {
+            var overlay = Panel_(_root, "ImageViewer", new Color(0, 0, 0, 0.92f), Vector2.zero, Vector2.one);
+            var backdropBtn = overlay.gameObject.AddComponent<Button>();
+            backdropBtn.transition = Selectable.Transition.None;
+            backdropBtn.onClick.AddListener(CloseImageViewer);
+
+            var frame = Panel_(overlay, "Frame", Color.clear, new Vector2(0.08f, 0.10f), new Vector2(0.92f, 0.88f));
+            frame.gameObject.AddComponent<Button>().transition = Selectable.Transition.None; // swallows clicks on the image itself
+
+            var tex = LoadThumbnail(_viewingImagePng);
+            if (tex != null)
+            {
+                var imgGo = new GameObject("Img", typeof(RawImage), typeof(AspectRatioFitter));
+                imgGo.transform.SetParent(frame, false);
+                var rt = (RectTransform)imgGo.transform;
+                rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                imgGo.GetComponent<RawImage>().texture = tex;
+                var fitter = imgGo.GetComponent<AspectRatioFitter>();
+                fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+                fitter.aspectRatio = (float)tex.width / Mathf.Max(1, tex.height);
+            }
+
+            Label(overlay, Path.GetFileName(_viewingImagePng), 16, new Vector2(0.08f, 0.90f), new Vector2(0.92f, 0.97f),
+                  TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            Label(overlay, "Click anywhere outside the image (or press Esc) to close", 12,
+                  new Vector2(0.08f, 0.02f), new Vector2(0.92f, 0.07f), TextDim, TMPro.TextAlignmentOptions.Center);
+            Button_(overlay, "✕", new Vector2(0.94f, 0.90f), new Vector2(0.985f, 0.955f), CloseImageViewer, PanelAlt, 18);
+        }
+
+        private void CloseImageViewer() { _viewingImagePng = null; Build(); }
 
         /// <summary>Opens the OS file browser with the file pre-selected where possible
         /// (Windows Explorer, macOS Finder); falls back to just opening the containing

@@ -92,8 +92,10 @@ namespace AeroTerra.Workshop
                 FuelL = spec.MaxFuelL,
                 PayloadKg = spec.MaxPayloadKg,
                 SkinId = "stock",
-                SmokeScreenEquipped = false,
+                SmokeScreenEquipped = true,
                 Comms = Drone.CommsType.Radio,
+                ParachuteEquipped = true,
+                AiSensorEquipped = false,
             };
             _yaw = 0f; _pitch = 0f;
             Rebuild();
@@ -157,6 +159,20 @@ namespace AeroTerra.Workshop
         }
         public void SetSmokeScreen(bool equipped) => Working.SmokeScreenEquipped = equipped;
         public void SetComms(Drone.CommsType comms) => Working.Comms = comms;
+        public void SetParachute(bool equipped) => Working.ParachuteEquipped = equipped;
+        public void SetAiSensor(bool equipped) => Working.AiSensorEquipped = equipped;
+
+        /// <summary>Only meaningful for a drone whose spec.AvailablePayloadKinds has 2+
+        /// entries (currently only Hornet) — see WorkshopUI.BuildPayloadKindCards. No
+        /// Rebuild() needed: like Comms, the kind only affects flight-time behavior
+        /// (PayloadDropper's model swap runs at spawn, not on the stationary Workshop
+        /// preview, which never has a PayloadDropper — see DroneFactory.Spawn's
+        /// flyable gate) and the Workshop's own weight/mass math, not the preview mesh.</summary>
+        public void SetPayloadKind(Drone.PayloadKind kind)
+        {
+            Working.SelectedPayloadKind = kind;
+            Working.HasSelectedPayloadKind = true;
+        }
 
         /// <summary>Skin changes need a full Rebuild() (not a live material tweak like the
         /// old color sliders) since the pattern texture is generated fresh per skin id.</summary>

@@ -25,6 +25,10 @@ namespace AeroTerra.Core
     {
         // Game
         public bool ShowHud = true;
+        /// <summary>Preview of the drone operator's procedural figure + max-range
+        /// boundary circle at the flight's ground spawn point (FlightSceneController.
+        /// Start(), DroneOperatorBuilder) — visual reference only, doesn't clamp flight.</summary>
+        public bool ShowOperatorArea = true;
 
         // Game — HUD elements: each independently toggleable, all visible by default.
         // FlightHUD.ApplyHudElementSettings() reads these; NarratorController.Enqueue()

@@ -40,6 +40,27 @@ namespace AeroTerra.Core
         [Header("Minimap landmarks")]
         public Landmark[] Landmarks = System.Array.Empty<Landmark>();
 
+        /// <summary>Named, selectable spawn presets for this map (Settings ▸ Free Flight ▸
+        /// Flying Conditions ▸ SPAWN LOCATION tab) — unlike Landmark above, each one is a
+        /// real place the drone can actually launch from: a description of the challenge
+        /// it sets up and its own recommended spawn altitude. Picking one overrides the
+        /// map's own Latitude/Longitude (via FlatOffsetMeters, same flat-earth conversion
+        /// Landmarks/the minimap already use) for that flight only — see
+        /// GameManager.SelectedSpawnLocationOverride. Populated by ProjectBootstrap for the
+        /// stock cities; add more directly on the .asset in the Inspector for any map.</summary>
+        [System.Serializable]
+        public class SpawnLocation
+        {
+            public string Name;
+            public double Latitude;
+            public double Longitude;
+            [TextArea] public string Description;
+            public double SpawnAltitudeMeters = 150;
+        }
+
+        [Header("Spawn location presets")]
+        public SpawnLocation[] SpawnLocations = System.Array.Empty<SpawnLocation>();
+
         /// <summary>Flat-earth local-tangent-plane approximation of a (lat,lon) point's
         /// offset in meters from (originLat,originLon) — (+x = east, +y = north). Accurate
         /// to well within HUD-minimap tolerances at the few-kilometer distances landmarks

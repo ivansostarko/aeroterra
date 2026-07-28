@@ -48,6 +48,7 @@ MonoBehaviour:
   - 10
   - 15
   PayloadTypeName: Warhead mass (simulated)
+  PayloadKind: 1
   EngineLoop: {fileID: 0}
   EnginePitchMin: 0.8
   EnginePitchMax: 1.8

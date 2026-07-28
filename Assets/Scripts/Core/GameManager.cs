@@ -22,6 +22,43 @@ namespace AeroTerra.Core
         /// call, so there's no staleness risk across separate Free Flight attempts.</summary>
         public double? SelectedSpawnAltitudeOverride;
 
+        /// <summary>Set by the Flying Conditions screen's SPAWN LOCATION tab; null = use
+        /// SelectedMap's own Latitude/Longitude (the map's default launch point). Always
+        /// (re)set fresh before every StartFreeFlight call, same contract as
+        /// SelectedSpawnAltitudeOverride above. Only carries position (Name/Latitude/
+        /// Longitude) — altitude for a picked preset is applied by the UI directly into
+        /// SelectedSpawnAltitudeOverride, so this class stays the single place altitude
+        /// is ever read from (see SpawnAltitudeM).</summary>
+        public MapDefinition.SpawnLocation SelectedSpawnLocationOverride;
+
+        /// <summary>The altitude every respawn/reset path should teleport to — the
+        /// Flying Conditions override if the player set one for this flight, else the
+        /// map's own default, else a hardcoded fallback. Single source of truth so
+        /// FlightSceneController.ResetDrone and DroneFlightController's crash/detonation
+        /// respawns can't drift out of sync with where the flight actually started.</summary>
+        public double SpawnAltitudeM => SelectedSpawnAltitudeOverride ?? SelectedMap?.SpawnAltitudeMeters ?? 150;
+
+        /// <summary>Local Unity-space spawn position (world X/Z, relative to the map's
+        /// Cesium georeference origin) every respawn/reset path should teleport to — (0,
+        /// alt, 0) at the map's own origin by default, or an offset computed from
+        /// SelectedSpawnLocationOverride's real-world lat/long via the same flat-earth
+        /// approximation the HUD minimap/Landmarks already use (MapDefinition.
+        /// FlatOffsetMeters). Pure math, no dependency on MapManager/Cesium having
+        /// finished initializing — see FlightSceneController.Start() for why that
+        /// ordering matters. Single source of truth, same spirit as SpawnAltitudeM.</summary>
+        public Vector3 SpawnLocalPosition
+        {
+            get
+            {
+                float alt = (float)SpawnAltitudeM;
+                if (SelectedSpawnLocationOverride == null || SelectedMap == null) return new Vector3(0f, alt, 0f);
+                Vector2 offset = MapDefinition.FlatOffsetMeters(
+                    SelectedSpawnLocationOverride.Latitude, SelectedSpawnLocationOverride.Longitude,
+                    SelectedMap.Latitude, SelectedMap.Longitude);
+                return new Vector3(offset.x, alt, offset.y);
+            }
+        }
+
         public SettingsData Settings { get; private set; }
 
         public const string SceneMainMenu = "MainMenu";

@@ -12,6 +12,7 @@
 *.unitypackage
 .vs/
 .idea/
+Builds/*
 
 # Claude Code — personal/local overrides only; .claude/settings.json and
 # .claude/commands/ are intentionally tracked and shared with the team.

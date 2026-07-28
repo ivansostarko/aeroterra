@@ -23,6 +23,15 @@ namespace AeroTerra.UI
         private System.Action _onBack;
         private Canvas _ownCanvas;
         private int _tab;
+
+        // Flying Conditions' own nested sub-tab bar — Sky/Weather presets vs. the
+        // Wind/Temperature/Humidity sliders read distinctly enough to split, and doing
+        // so meant each sub-tab comfortably fits without the scrollable wrapper the
+        // combined content used to need (see the old TabConditions special-case this
+        // replaced).
+        private const int CondSkyWeather = 0, CondAtmosphere = 1;
+        private static readonly string[] ConditionsSubTabNames = { "SKY & WEATHER", "ATMOSPHERE" };
+        private int _conditionsTab;
         private InputActionRebindingExtensions.RebindingOperation _rebindOp;
         private RectTransform _resolutionPopup;
         private TMPro.TextMeshProUGUI _savedLabel;
@@ -106,23 +115,10 @@ namespace AeroTerra.UI
 
             _content = Panel_(_root, "Content", Panel, new Vector2(0.25f, 0.10f), new Vector2(0.97f, 0.86f));
 
-            if (_tab == TabConditions)
-            {
-                // Wind/Temperature/Humidity sliders on top of Sky/Weather outgrew one
-                // screen's worth of space — scrollable, same ScrollList primitive
-                // Workshop's Loadout tab uses. _content is reassigned to the taller
-                // scroll content for the rest of this Build() call so BuildConditions()
-                // needs no parameter — it already just writes through the _content field.
-                var (viewport, scrollContent, _) = ScrollList(_content, "ConditionsScroll", Vector2.zero, Vector2.one);
-                scrollContent.sizeDelta = new Vector2(0f, viewport.rect.height * 1.5f);
-                _content = scrollContent;
-                BuildConditions();
-                return;
-            }
-
             switch (_tab)
             {
                 case TabGame: BuildGame(); break;
+                case TabConditions: BuildConditions(); break;
                 case TabVideo: BuildVideo(); break;
                 case TabAudio: BuildAudio(); break;
                 case TabMap: BuildMap(); break;
@@ -153,7 +149,7 @@ namespace AeroTerra.UI
         {
             var s = GameManager.Instance.Settings;
 
-            Toggle_(_content, "Show HUD", new Vector2(0.04f, 0.90f), new Vector2(0.5f, 0.97f),
+            SwitchToggle_(_content, "Show HUD", new Vector2(0.04f, 0.90f), new Vector2(0.5f, 0.97f),
                     s.ShowHud, v =>
                     {
                         s.ShowHud = v;
@@ -163,15 +159,24 @@ namespace AeroTerra.UI
             Label(_content, "Master switch — turns the entire in-flight HUD on or off.", 13,
                   new Vector2(0.09f, 0.855f), new Vector2(0.9f, 0.885f), TextDim);
 
-            Panel_(_content, "Divider", new Color(Accent.r, Accent.g, Accent.b, 0.3f),
-                   new Vector2(0.04f, 0.825f), new Vector2(0.96f, 0.828f));
+            SwitchToggle_(_content, "Preview operator area", new Vector2(0.04f, 0.790f), new Vector2(0.5f, 0.860f),
+                    s.ShowOperatorArea, v =>
+                    {
+                        s.ShowOperatorArea = v;
+                        GameManager.Instance.SaveSettings();
+                    }, 22);
+            Label(_content, "Shows a drone operator figure and a max-range boundary circle at the spawn point in flight.", 13,
+                  new Vector2(0.09f, 0.745f), new Vector2(0.9f, 0.775f), TextDim);
 
-            Label(_content, "HUD ELEMENTS", 18, new Vector2(0.04f, 0.775f), new Vector2(0.6f, 0.815f),
+            Panel_(_content, "Divider", new Color(Accent.r, Accent.g, Accent.b, 0.3f),
+                   new Vector2(0.04f, 0.715f), new Vector2(0.96f, 0.718f));
+
+            Label(_content, "HUD ELEMENTS", 18, new Vector2(0.04f, 0.665f), new Vector2(0.6f, 0.705f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
             Label(_content, "Show or hide individual instruments in flight — every element is on by default.", 13,
-                  new Vector2(0.04f, 0.74f), new Vector2(0.96f, 0.775f), TextDim);
+                  new Vector2(0.04f, 0.630f), new Vector2(0.96f, 0.665f), TextDim);
 
-            var group = Panel_(_content, "HudElementsGroup", PanelAlt, new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.725f));
+            var group = Panel_(_content, "HudElementsGroup", PanelAlt, new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.615f));
 
             var elements = new (string label, bool value, System.Action<bool> set)[]
             {
@@ -198,7 +203,7 @@ namespace AeroTerra.UI
                 float x0 = col * colW + 0.03f, x1 = (col + 1) * colW - 0.03f;
                 float y1 = 1f - row * rowH - 0.02f, y0 = 1f - (row + 1) * rowH + 0.02f;
                 var (label, value, set) = elements[i];
-                Toggle_(group, label, new Vector2(x0, y0), new Vector2(x1, y1), value, v =>
+                SwitchToggle_(group, label, new Vector2(x0, y0), new Vector2(x1, y1), value, v =>
                 {
                     set(v);
                     GameManager.Instance.SaveSettings();
@@ -220,22 +225,38 @@ namespace AeroTerra.UI
         {
             var s = GameManager.Instance.Settings;
 
-            Label(_content, "SKY", 22, new Vector2(0.04f, 0.90f), new Vector2(0.3f, 0.96f),
+            // Nested sub-tab bar, same "mutate field + full Build()" pattern as every
+            // other tab bar in this file, just horizontal (matches MediaUI's
+            // SCREENSHOTS/RECORDINGS tabs) since this content area is wide, not tall.
+            for (int i = 0; i < ConditionsSubTabNames.Length; i++)
+            {
+                int idx = i;
+                float x0 = 0.04f + i * 0.30f, x1 = x0 + 0.28f;
+                Button_(_content, ConditionsSubTabNames[i], new Vector2(x0, 0.90f), new Vector2(x1, 0.97f),
+                        () => { _conditionsTab = idx; Build(); }, _conditionsTab == i ? Accent : PanelAlt, 16);
+            }
+
+            if (_conditionsTab == CondAtmosphere) { BuildAtmosphereTab(s); return; }
+            BuildSkyWeatherTab(s);
+        }
+
+        private void BuildSkyWeatherTab(SettingsData s)
+        {
+            Label(_content, "SKY", 22, new Vector2(0.04f, 0.80f), new Vector2(0.3f, 0.86f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
             OptionRow(_content, new[] { SkyPreset.Day, SkyPreset.Dawn, SkyPreset.Dusk, SkyPreset.Night },
-                s.Sky, new Vector2(0.04f, 0.83f), new Vector2(0.96f, 0.89f),
+                s.Sky, new Vector2(0.04f, 0.73f), new Vector2(0.96f, 0.79f),
                 sky => { s.Sky = sky; GameManager.Instance.SaveSettings(); Map.SkySystem.Instance?.Apply(sky); });
 
-            Label(_content, "WEATHER", 22, new Vector2(0.04f, 0.73f), new Vector2(0.4f, 0.79f),
+            Label(_content, "WEATHER", 22, new Vector2(0.04f, 0.62f), new Vector2(0.4f, 0.68f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
-            // Picking a weather type resets Wind/Temperature/Humidity below to that
-            // preset's typical values (a full Build() refreshes every slider's position
-            // + label to match) — each stays freely adjustable afterward, this is a
-            // sensible starting point per weather, not a lock.
+            // Picking a weather type resets Wind/Temperature/Humidity (on the Atmosphere
+            // sub-tab) to that preset's typical values — each stays freely adjustable
+            // afterward, this is a sensible starting point per weather, not a lock.
             OptionRow(_content,
                 new[] { WeatherPreset.Clear, WeatherPreset.Cloudy, WeatherPreset.Rain,
                         WeatherPreset.Storm, WeatherPreset.Fog, WeatherPreset.Snow },
-                s.Weather, new Vector2(0.04f, 0.66f), new Vector2(0.96f, 0.72f),
+                s.Weather, new Vector2(0.04f, 0.55f), new Vector2(0.96f, 0.61f),
                 w =>
                 {
                     s.Weather = w;
@@ -246,18 +267,21 @@ namespace AeroTerra.UI
                     Map.WeatherSystem.Instance?.Apply(w);
                     Build();
                 });
+        }
 
-            Label(_content, "WIND", 22, new Vector2(0.04f, 0.58f), new Vector2(0.3f, 0.64f),
+        private void BuildAtmosphereTab(SettingsData s)
+        {
+            Label(_content, "WIND", 22, new Vector2(0.04f, 0.80f), new Vector2(0.3f, 0.86f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
-            var windValueLabel = Label(_content, "", 16, new Vector2(0.3f, 0.58f), new Vector2(0.96f, 0.64f),
+            var windValueLabel = Label(_content, "", 16, new Vector2(0.3f, 0.80f), new Vector2(0.96f, 0.86f),
                                        TextMain, TMPro.TextAlignmentOptions.Right);
-            var windTrack = Panel_(_content, "WindTrack", PanelAlt, new Vector2(0.04f, 0.555f), new Vector2(0.96f, 0.575f));
+            var windTrack = Panel_(_content, "WindTrack", PanelAlt, new Vector2(0.04f, 0.775f), new Vector2(0.96f, 0.795f));
             var windFill = Panel_(windTrack, "WindFill", Accent, Vector2.zero, new Vector2(0f, 1f));
 
             // WeatherSystem.Update() polls WindSpeedMs live every frame (same pull
             // pattern DroneFlightController already uses for InvertPitch), so this
             // callback only needs to persist the setting — no separate apply call.
-            SliderRow("WIND SPEED", Mathf.InverseLerp(0f, WindMaxMs, s.WindSpeedMs), 0.50f,
+            SliderRow("WIND SPEED", Mathf.InverseLerp(0f, WindMaxMs, s.WindSpeedMs), 0.72f,
                 new Vector2(0.04f, 0.96f),
                 v =>
                 {
@@ -271,7 +295,7 @@ namespace AeroTerra.UI
             // Temperature feeds BatterySystem.PerformanceFactor in flight — too cold or
             // too hot and battery-powered airframes lose thrust ceiling (fuel-powered
             // ones are unaffected). Purely descriptive for now on the Humidity side.
-            SliderRow("TEMPERATURE", Mathf.InverseLerp(MinTemperatureC, MaxTemperatureC, s.TemperatureC), 0.36f,
+            SliderRow("TEMPERATURE", Mathf.InverseLerp(MinTemperatureC, MaxTemperatureC, s.TemperatureC), 0.58f,
                 new Vector2(0.04f, 0.96f),
                 v =>
                 {
@@ -280,7 +304,7 @@ namespace AeroTerra.UI
                 },
                 v => $"{Mathf.Lerp(MinTemperatureC, MaxTemperatureC, v):0}°C");
 
-            SliderRow("HUMIDITY", s.HumidityPercent / 100f, 0.22f, new Vector2(0.04f, 0.96f),
+            SliderRow("HUMIDITY", s.HumidityPercent / 100f, 0.44f, new Vector2(0.04f, 0.96f),
                 v =>
                 {
                     s.HumidityPercent = v * 100f;
@@ -587,8 +611,14 @@ namespace AeroTerra.UI
                 });
 
             // Bigger diagram now that the key bindings list lives on its own tab.
+            // Keyboard gets a full physical-layout diagram (every bound key marked and
+            // hover-describable, live from InputManager); Gamepad/Gyroscope keep the
+            // simpler sketch-style diagram.
             var diagramArea = Panel_(_content, "Diagram", PanelAlt, new Vector2(0.04f, 0.30f), new Vector2(0.96f, 0.78f));
-            ControlsDiagram.Draw(diagramArea, s.Scheme);
+            if (s.Scheme == ControlScheme.Keyboard)
+                KeyboardDiagram.Draw(diagramArea);
+            else
+                ControlsDiagram.Draw(diagramArea, s.Scheme);
 
             Toggle_(_content, "Invert pitch", new Vector2(0.04f, 0.20f), new Vector2(0.46f, 0.27f),
                     s.InvertPitch, v => { s.InvertPitch = v; GameManager.Instance.SaveSettings(); });
@@ -616,6 +646,7 @@ namespace AeroTerra.UI
             "PayloadDrop" => "PAYLOAD DROP",
             "SmokeScreen" => "SMOKE SCREEN",
             "PhotoMode" => "PHOTO MODE",
+            "DroneFlip" => "DRONE FLIP",
             _ => actionName.ToUpperInvariant(),
         };
 
@@ -683,7 +714,7 @@ namespace AeroTerra.UI
         {
             Label(_content, "KEY BINDINGS", 22, new Vector2(0.04f, 0.88f), new Vector2(0.6f, 0.97f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
-            Label(_content, "Click a binding to rebind it. Pause (Esc) is fixed. (ALT) keys are fixed alternates, not independently rebindable.", 14,
+            Label(_content, "Click a binding to rebind it. Pause (Esc) is fixed.", 14,
                   new Vector2(0.04f, 0.80f), new Vector2(0.96f, 0.87f), TextDim);
 
             var im = AeroTerra.Input.InputManager.Instance;

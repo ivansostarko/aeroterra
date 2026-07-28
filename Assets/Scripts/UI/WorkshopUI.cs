@@ -693,11 +693,15 @@ namespace AeroTerra.UI
             bool fuelPowered = spec.PowerSystem == PowerSystemType.Fuel;
 
             SectionHeader(panel, fuelPowered ? "FUEL TANK" : "POWER CELL", 0.900f, x0, x1);
+            // Eight tiers now (was four) — laid out as a 4-wide, 2-row grid rather than
+            // cramming eight cards into one row; BuildBatteryCards/BuildFuelCards wrap
+            // automatically based on variants.Length, so this stays correct even if a
+            // future drone's variant count ever changes.
             if (fuelPowered)
-                BuildFuelCards(panel, spec, x0, x1, 0.775f, 0.845f);
+                BuildFuelCards(panel, spec, x0, x1, 0.845f);
             else
-                BuildBatteryCards(panel, spec, x0, x1, 0.775f, 0.845f);
-            _powerLine = Label(panel, "", 12, new Vector2(x0, 0.745f), new Vector2(x1, 0.767f), TextDim);
+                BuildBatteryCards(panel, spec, x0, x1, 0.845f);
+            _powerLine = Label(panel, "", 12, new Vector2(x0, 0.670f), new Vector2(x1, 0.695f), TextDim);
             RefreshPowerLine(spec);
         }
 
@@ -708,13 +712,77 @@ namespace AeroTerra.UI
         private void BuildLoadoutPayload(Transform panel, DroneSpecification spec)
         {
             const float x0 = LoadoutContentX0, x1 = LoadoutContentX1;
+            bool multiKind = spec.AvailablePayloadKinds != null && spec.AvailablePayloadKinds.Length > 1;
 
-            SectionHeader(panel, $"PAYLOAD — {spec.PayloadTypeName.ToUpper()}", 0.900f, x0, x1);
-            BuildPayloadRow(panel, spec, x0, x1, 0.775f, 0.845f);
-            _massLine = Label(panel, "", 13, new Vector2(x0, 0.745f), new Vector2(x1, 0.770f), TextDim);
+            if (multiKind)
+            {
+                // Currently only AT-R4 Hornet: the player picks which munition category
+                // this build carries (each category still has its own weight scale, same
+                // spec.PayloadOptionsKg every drone already uses) instead of the category
+                // being a fixed, non-selectable spec property.
+                var kind = _ctrl.Working.HasSelectedPayloadKind ? _ctrl.Working.SelectedPayloadKind : spec.PayloadKind;
+                SectionHeader(panel, $"PAYLOAD — {DroneSpecification.PayloadKindLabel(kind).ToUpper()}", 0.900f, x0, x1);
+                Label(panel, "AMMUNITION CATEGORY — pick a loadout type for this build", 12,
+                      new Vector2(x0, 0.858f), new Vector2(x1, 0.888f), TextDim);
+                BuildPayloadKindCards(panel, spec, x0, x1, 0.775f, 0.845f);
+
+                Label(panel, "WEIGHT", 12, new Vector2(x0, 0.720f), new Vector2(x0 + 0.3f, 0.750f),
+                      Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
+                OptionRow(panel, spec.PayloadOptionsKg, _ctrl.Working.PayloadKg,
+                    new Vector2(x0, 0.660f), new Vector2(x1, 0.712f),
+                    kg => { _ctrl.SetPayload(kg); RefreshLive(); }, kg => $"{kg:0.#} kg");
+                // No "Total weight (incl. payload...)" readout here — per request, this
+                // tab (currently only Hornet) stays focused on category + weight, not a
+                // full mass breakdown (still shown elsewhere, e.g. the AUW chip).
+                _massLine = null;
+            }
+            else
+            {
+                SectionHeader(panel, $"PAYLOAD — {spec.PayloadTypeName.ToUpper()}", 0.900f, x0, x1);
+                BuildPayloadRow(panel, spec, x0, x1, 0.775f, 0.845f);
+                _massLine = Label(panel, "", 13, new Vector2(x0, 0.745f), new Vector2(x1, 0.770f), TextDim);
+            }
             // No separate "display payload on model" toggle — the 3D preview shows the
             // payload automatically whenever a nonzero weight is selected above, and
             // hides it at 0 kg (see WorkshopController.ApplyPayloadVisual).
+        }
+
+        /// <summary>Category-picker row for a drone with 2+ spec.AvailablePayloadKinds
+        /// (currently only Hornet) — same clickable-card shape as BuildCommsCards, glyph
+        /// via the existing PaintPayloadGlyph. Picking one calls WorkshopController.
+        /// SetPayloadKind and rebuilds the tab so the section header/weight readout above
+        /// reflect the new category immediately.</summary>
+        private void BuildPayloadKindCards(Transform panel, DroneSpecification spec, float x0Row, float x1Row, float y0, float y1)
+        {
+            var kinds = spec.AvailablePayloadKinds;
+            var effective = _ctrl.Working.HasSelectedPayloadKind ? _ctrl.Working.SelectedPayloadKind : spec.PayloadKind;
+            const float gap = 0.012f;
+            float cellW = (x1Row - x0Row - (kinds.Length - 1) * gap) / kinds.Length;
+            for (int i = 0; i < kinds.Length; i++)
+            {
+                var kind = kinds[i];
+                bool selected = kind == effective;
+                float x0 = x0Row + i * (cellW + gap), x1 = x0 + cellW;
+                var card = Panel_(panel, "PKind_" + kind, selected ? PanelAlt : Panel, new Vector2(x0, y0), new Vector2(x1, y1));
+                Panel_(card, "Stripe", selected ? Accent : new Color(1, 1, 1, 0.08f), Vector2.zero, new Vector2(1f, 0.08f));
+                PaintPayloadGlyph(card, kind);
+                Label(card, DroneSpecification.PayloadKindLabel(kind), 12, new Vector2(0.04f, 0.08f), new Vector2(0.96f, 0.30f),
+                      selected ? TextMain : TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+
+                var btn = card.gameObject.AddComponent<Button>();
+                btn.targetGraphic = card.GetComponent<Image>();
+                var colors = btn.colors; colors.highlightedColor = new Color(1.15f, 1.15f, 1.15f, 1f); colors.pressedColor = Accent;
+                btn.colors = colors;
+                btn.onClick.AddListener(() =>
+                {
+                    Core.AudioManager.Instance?.PlayButtonClick();
+                    _ctrl.SetPayloadKind(kind);
+                    RefreshLive();
+                    Build();
+                });
+                var trigger = card.gameObject.AddComponent<EventTrigger>();
+                AddTrigger(trigger, EventTriggerType.PointerEnter, _ => Core.AudioManager.Instance?.PlayButtonHover());
+            }
         }
 
         private void BuildLoadoutSystems(Transform panel, DroneSpecification spec)
@@ -726,14 +794,19 @@ namespace AeroTerra.UI
             Label(panel, CameraNoteText(spec), 12, new Vector2(x0, 0.760f), new Vector2(x1, 0.795f), TextDim);
 
             SectionHeader(panel, "ADDITIONAL LOADOUT", 0.700f, x0, x1);
-            Toggle_(panel, "Smoke screen", new Vector2(x0, 0.625f), new Vector2(x0 + 0.30f, 0.670f),
-                    _ctrl.Working.SmokeScreenEquipped, v => { _ctrl.SetSmokeScreen(v); RefreshLive(); }, 13);
-            Label(panel, $"+{LoadoutExtras.SmokeScreenKg:0.##} kg", 12,
-                  new Vector2(x0 + 0.32f, 0.625f), new Vector2(x1, 0.670f), TextDim);
+            SwitchToggle_(panel, $"Smoke Screen    +{LoadoutExtras.SmokeScreenKg:0.##} kg",
+                    new Vector2(x0, 0.625f), new Vector2(x1, 0.670f),
+                    _ctrl.Working.SmokeScreenEquipped, v => { _ctrl.SetSmokeScreen(v); RefreshLive(); }, 14);
+            SwitchToggle_(panel, $"Parachute    +{LoadoutExtras.ParachuteKg:0.##} kg",
+                    new Vector2(x0, 0.565f), new Vector2(x1, 0.610f),
+                    _ctrl.Working.ParachuteEquipped, v => { _ctrl.SetParachute(v); RefreshLive(); }, 14);
+            SwitchToggle_(panel, $"AI Sensor    +{LoadoutExtras.AiSensorKg:0.##} kg",
+                    new Vector2(x0, 0.505f), new Vector2(x1, 0.550f),
+                    _ctrl.Working.AiSensorEquipped, v => { _ctrl.SetAiSensor(v); RefreshLive(); }, 14);
 
-            Label(panel, "COMMS", 12, new Vector2(x0, 0.545f), new Vector2(x0 + 0.30f, 0.580f),
+            Label(panel, "DRONE COMMUNICATION", 12, new Vector2(x0, 0.430f), new Vector2(x1, 0.465f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
-            BuildCommsCards(panel, x0, x1, 0.445f, 0.535f);
+            BuildCommsCards(panel, x0, x1, 0.330f, 0.420f);
         }
 
         private void BuildLoadoutFooter(Transform panel)
@@ -746,65 +819,37 @@ namespace AeroTerra.UI
                                   Accent, TMPro.TextAlignmentOptions.Right);
         }
 
-        private static readonly System.Collections.Generic.Dictionary<string, Texture2D> _cameraIconCache =
-            new System.Collections.Generic.Dictionary<string, Texture2D>();
-
-        /// <summary>Loads Assets/Resources/Images/ui/Camera/{file}.png once and caches it;
-        /// returns null (silently) if the icon hasn't been imported yet, same fallback
-        /// spirit as UIBuilder.BackButton_.</summary>
-        private static Texture2D LoadCameraIcon(string file)
-        {
-            if (_cameraIconCache.TryGetValue(file, out var cached)) return cached;
-            var tex = Resources.Load<Texture2D>("Images/ui/Camera/" + file);
-            _cameraIconCache[file] = tex;
-            return tex;
-        }
-
         /// <summary>Read-only row of camera badges — Front / Thermal / Bottom Surveillance —
         /// reflecting this airframe's fixed DroneSpecification camera bools (not player-
-        /// editable, same spirit as the payload-kind badge). Equipped cameras highlight
-        /// in Accent and show that camera's icon; unfitted ones stay dim with no icon,
-        /// same visual language as BuildCommsCards.</summary>
+        /// editable, same spirit as the payload-kind badge). No imported icon/background
+        /// image per card (the old imported PNGs each baked in their own background panel
+        /// and text, which read as a mini-panel competing with this card's own styling) —
+        /// equipped vs. not-equipped is instead communicated purely by this card's own
+        /// styling: PanelAlt background + Accent top stripe + bright "● EQUIPPED" caption
+        /// when fitted, dim Panel background + faint stripe + "○ NOT FITTED" when not —
+        /// unambiguous at a glance across all three cards, same visual language
+        /// BuildCommsCards already uses for its own selected/unselected cards.</summary>
         private void BuildCameraBadges(Transform panel, DroneSpecification spec, float x0Row, float x1Row, float y0, float y1)
         {
-            var defs = new (string name, bool has, string icon)[]
+            var defs = new (string name, bool has)[]
             {
-                ("FRONT CAMERA", spec.HasFrontCamera, "front_camera_icon"),
-                ("THERMAL CAMERA", spec.HasThermalCamera, "thermal_camera_icon"),
-                ("BOTTOM SURVEILLANCE", spec.HasBackCamera, "back_camera_icon"),
+                ("FRONT CAMERA", spec.HasFrontCamera),
+                ("THERMAL CAMERA", spec.HasThermalCamera),
+                ("BOTTOM SURVEILLANCE", spec.HasBackCamera),
             };
             const float gap = 0.012f;
             float cellW = (x1Row - x0Row - (defs.Length - 1) * gap) / defs.Length;
             for (int i = 0; i < defs.Length; i++)
             {
-                var (name, has, iconFile) = defs[i];
+                var (name, has) = defs[i];
                 float x0 = x0Row + i * (cellW + gap), x1 = x0 + cellW;
                 var card = Panel_(panel, "Cam_" + name, has ? PanelAlt : Panel, new Vector2(x0, y0), new Vector2(x1, y1));
                 Panel_(card, "Stripe", has ? Accent : new Color(1, 1, 1, 0.08f), Vector2.zero, new Vector2(1f, 0.08f));
 
-                var icon = has ? LoadCameraIcon(iconFile) : null;
-                if (icon != null)
-                {
-                    var iconGo = new GameObject("Icon", typeof(RawImage));
-                    iconGo.transform.SetParent(card, false);
-                    iconGo.GetComponent<RawImage>().texture = icon;
-                    var iconRt = iconGo.GetComponent<RectTransform>();
-                    iconRt.anchorMin = new Vector2(0.32f, 0.46f);
-                    iconRt.anchorMax = new Vector2(0.68f, 0.92f);
-                    iconRt.offsetMin = Vector2.zero; iconRt.offsetMax = Vector2.zero;
-
-                    Label(card, name, 10, new Vector2(0.05f, 0.24f), new Vector2(0.95f, 0.44f),
-                          TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
-                    Label(card, "EQUIPPED", 9, new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.22f),
-                          Accent, TMPro.TextAlignmentOptions.Center);
-                }
-                else
-                {
-                    Label(card, name, 11, new Vector2(0.05f, 0.42f), new Vector2(0.95f, 0.92f),
-                          has ? TextMain : TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
-                    Label(card, has ? "EQUIPPED" : "NOT FITTED", 9, new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.40f),
-                          has ? Accent : new Color(1, 1, 1, 0.25f), TMPro.TextAlignmentOptions.Center);
-                }
+                Label(card, name, 13, new Vector2(0.05f, 0.50f), new Vector2(0.95f, 0.88f),
+                      has ? TextMain : TextDim, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+                Label(card, has ? "● EQUIPPED" : "○ NOT FITTED", 11, new Vector2(0.05f, 0.16f), new Vector2(0.95f, 0.42f),
+                      has ? Accent : new Color(1, 1, 1, 0.30f), TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
             }
         }
 
@@ -843,7 +888,9 @@ namespace AeroTerra.UI
                 ? _ctrl.Working.FuelL * FuelDensityForCapacity(spec, _ctrl.Working.FuelL)
                 : _ctrl.Working.BatteryWh / DensityForCapacity(spec, _ctrl.Working.BatteryWh);
             float extraKg = (_ctrl.Working.SmokeScreenEquipped ? LoadoutExtras.SmokeScreenKg : 0f)
-                          + LoadoutExtras.CommsWeightKg(_ctrl.Working.Comms);
+                          + LoadoutExtras.CommsWeightKg(_ctrl.Working.Comms)
+                          + (_ctrl.Working.ParachuteEquipped ? LoadoutExtras.ParachuteKg : 0f)
+                          + (_ctrl.Working.AiSensorEquipped ? LoadoutExtras.AiSensorKg : 0f);
             return spec.EmptyMassKg + powerKg + _ctrl.Working.PayloadKg + extraKg;
         }
 
@@ -878,7 +925,13 @@ namespace AeroTerra.UI
             }
         }
 
-        private void BuildBatteryCards(Transform panel, DroneSpecification spec, float x0Row, float x1Row, float y0, float y1)
+        // Power card grid — 4 columns, as many rows as needed (2, at the current 8-tier
+        // count). Shared row/column math for both Battery and Fuel so the two stay
+        // visually identical; rowsTop is the TOP of the first row, grid grows downward.
+        private const int PowerGridCols = 4;
+        private const float PowerGridRowH = 0.063f, PowerGridRowGap = 0.010f, PowerGridColGap = 0.012f;
+
+        private void BuildBatteryCards(Transform panel, DroneSpecification spec, float x0Row, float x1Row, float rowsTop)
         {
             var variants = spec.GetBatteryVariants();
             float wh = _ctrl.Working.BatteryWh;
@@ -886,12 +939,13 @@ namespace AeroTerra.UI
             for (int i = 0; i < variants.Length; i++)
                 if (Mathf.Approximately(variants[i].CapacityWh, wh)) selected = i;
 
-            const float gap = 0.012f;
-            float cellW = (x1Row - x0Row - (variants.Length - 1) * gap) / variants.Length;
+            float cellW = (x1Row - x0Row - (PowerGridCols - 1) * PowerGridColGap) / PowerGridCols;
             for (int i = 0; i < variants.Length; i++)
             {
                 var v = variants[i];
-                float x0 = x0Row + i * (cellW + gap), x1 = x0 + cellW;
+                int row = i / PowerGridCols, col = i % PowerGridCols;
+                float x0 = x0Row + col * (cellW + PowerGridColGap), x1 = x0 + cellW;
+                float y1 = rowsTop - row * (PowerGridRowH + PowerGridRowGap), y0 = y1 - PowerGridRowH;
                 string hover = $"{v.Name}\n{v.CapacityWh:0} Wh · {v.MassKg:0.##} kg\n" +
                                $"{spec.EnduranceMinutes(v.CapacityWh):0} min flight";
                 BuildPowerCard(panel, x0, x1, y0, y1, i == selected, v.Name, $"{v.CapacityWh:0} Wh", hover,
@@ -899,7 +953,7 @@ namespace AeroTerra.UI
             }
         }
 
-        private void BuildFuelCards(Transform panel, DroneSpecification spec, float x0Row, float x1Row, float y0, float y1)
+        private void BuildFuelCards(Transform panel, DroneSpecification spec, float x0Row, float x1Row, float rowsTop)
         {
             var variants = spec.GetFuelVariants();
             float l = _ctrl.Working.FuelL;
@@ -907,12 +961,13 @@ namespace AeroTerra.UI
             for (int i = 0; i < variants.Length; i++)
                 if (Mathf.Approximately(variants[i].CapacityL, l)) selected = i;
 
-            const float gap = 0.012f;
-            float cellW = (x1Row - x0Row - (variants.Length - 1) * gap) / variants.Length;
+            float cellW = (x1Row - x0Row - (PowerGridCols - 1) * PowerGridColGap) / PowerGridCols;
             for (int i = 0; i < variants.Length; i++)
             {
                 var v = variants[i];
-                float x0 = x0Row + i * (cellW + gap), x1 = x0 + cellW;
+                int row = i / PowerGridCols, col = i % PowerGridCols;
+                float x0 = x0Row + col * (cellW + PowerGridColGap), x1 = x0 + cellW;
+                float y1 = rowsTop - row * (PowerGridRowH + PowerGridRowGap), y0 = y1 - PowerGridRowH;
                 string hover = $"{v.Name}\n{v.CapacityL:0.#} L · {v.MassKg:0.##} kg\n" +
                                $"{spec.FuelEnduranceMinutes(v.CapacityL):0} min flight";
                 BuildPowerCard(panel, x0, x1, y0, y1, i == selected, v.Name, $"{v.CapacityL:0.#} L", hover,

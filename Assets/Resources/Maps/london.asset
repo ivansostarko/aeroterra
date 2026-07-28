@@ -20,3 +20,29 @@ MonoBehaviour:
   Longitude: -0.1657
   SpawnAltitudeMeters: 350
   SpawnHeadingDeg: 0
+  SpawnLocations:
+  - Name: Tower Bridge
+    Latitude: 51.5056
+    Longitude: -0.0753
+    Description: Bridge fly-through challenge
+    SpawnAltitudeMeters: 500
+  - Name: Palace of Westminster
+    Latitude: 51.499167
+    Longitude: -0.124722
+    Description: Landmark reconnaissance mission
+    SpawnAltitudeMeters: 500
+  - Name: The O2
+    Latitude: 51.502778
+    Longitude: 0.003056
+    Description: Dome orbit and rooftop inspection
+    SpawnAltitudeMeters: 500
+  - Name: Battersea Power Station
+    Latitude: 51.481667
+    Longitude: -0.144722
+    Description: Industrial inspection mission
+    SpawnAltitudeMeters: 500
+  - Name: Canary Wharf
+    Latitude: 51.505
+    Longitude: -0.0225
+    Description: High-rise slalom race
+    SpawnAltitudeMeters: 500

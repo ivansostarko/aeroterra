@@ -26,6 +26,7 @@ namespace AeroTerra.Drone
         private PayloadSystem _payload;
         private Rigidbody _droneRb;
         private DroneFlightController _flight;
+        private Collider[] _droneColliders;
         private float _originalPayloadKg;
         private bool _reloading;
         private float _reloadTimer;
@@ -46,6 +47,7 @@ namespace AeroTerra.Drone
             _payload = GetComponent<PayloadSystem>();
             _droneRb = GetComponent<Rigidbody>();
             _flight = GetComponent<DroneFlightController>();
+            _droneColliders = GetComponentsInChildren<Collider>(true);
             _originalPayloadKg = _payload.CurrentPayloadKg; // captured before any drop ever zeroes it
         }
 
@@ -73,18 +75,59 @@ namespace AeroTerra.Drone
                 else if (_flight != null)
                 {
                     // Multi-mount military airframes (Hornet/Kestrel/Bison) — give the
-                    // assigned PayloadKind its own procedural munition model.
+                    // effective PayloadKind (the player's category pick if this airframe
+                    // has more than one available — currently only Hornet — else just
+                    // Spec.PayloadKind unchanged) its own procedural munition model.
+                    //
+                    // AT-R4 Hornet only (explicit request): the attached munition's own
+                    // size also reflects which weight tier is armed — 0.5 kg reads
+                    // visibly smaller, 1 kg is the original/reference size, 1.5 kg reads
+                    // visibly larger. Scaling the store's own transform (not the mesh
+                    // geometry inside PayloadModelBuilder) means this is "free" for the
+                    // dropped copy too — TryDrop() already copies store.lossyScale onto
+                    // the instantiated drop, and its collider is sized from the scaled
+                    // renderer bounds, so the physical hitbox/blast point scales with the
+                    // look, not just the visual.
+                    bool scaleWithWeight = _flight.Spec.Id == "at-r4";
+                    float visualScale = scaleWithWeight
+                        ? PayloadVisualScale(_flight.Spec, _originalPayloadKg) : 1f;
                     foreach (var store in _stores)
-                        PayloadModelBuilder.Rebuild(store, _flight.Spec.PayloadKind,
+                    {
+                        PayloadModelBuilder.Rebuild(store, _flight.EffectivePayloadKind,
                             _flight.Spec.DefaultBodyColor, _flight.Spec.DefaultAccentColor);
+                        if (scaleWithWeight) store.localScale = Vector3.one * visualScale;
+                    }
                 }
             }
+        }
+
+        private const float PayloadSmallScale = 0.8f;
+        private const float PayloadDefaultScale = 1.0f;
+        private const float PayloadLargeScale = 1.3f;
+
+        /// <summary>Maps an armed payload weight to a visual scale multiplier: 0.8x at
+        /// the lightest selectable weight, 1.0x (today's original/reference size) at the
+        /// midpoint between lightest and heaviest, 1.3x at the heaviest — piecewise
+        /// rather than one straight lerp so the reference size lands exactly on 1.0x
+        /// instead of merely close to it. PayloadOptionsKg[0] is always 0 (the "unarmed"
+        /// option), so index 1 is the lightest REAL weight, not the array's own min.</summary>
+        private static float PayloadVisualScale(DroneSpecification spec, float kg)
+        {
+            var options = spec.PayloadOptionsKg;
+            if (options == null || options.Length < 3) return PayloadDefaultScale;
+            float minKg = options[1];
+            float maxKg = options[options.Length - 1];
+            if (maxKg <= minKg) return PayloadDefaultScale;
+            float midKg = (minKg + maxKg) * 0.5f;
+            return kg <= midKg
+                ? Mathf.Lerp(PayloadSmallScale, PayloadDefaultScale, Mathf.InverseLerp(minKg, midKg, kg))
+                : Mathf.Lerp(PayloadDefaultScale, PayloadLargeScale, Mathf.InverseLerp(midKg, maxKg, kg));
         }
 
         /// <summary>Distinct aural signature per PayloadKind from the same two shared
         /// clips (bomb-drop/bomb-explosion) — Warhead reads heavier/deeper, Guided
         /// reads crisper/higher-tech, Drop is the neutral baseline.</summary>
-        private float PitchForKind() => _flight == null ? 1f : _flight.Spec.PayloadKind switch
+        private float PitchForKind() => _flight == null ? 1f : _flight.EffectivePayloadKind switch
         {
             PayloadKind.Warhead => 0.75f,
             PayloadKind.GuidedAmmunition => 1.15f,
@@ -136,7 +179,7 @@ namespace AeroTerra.Drone
                 // this drone's real-world scale (see DroneFactory's WingspanM scaling).
                 dropped.transform.localScale = store.lossyScale;
                 dropped.SetActive(true);
-                PayloadKind kind = _flight != null ? _flight.Spec.PayloadKind : PayloadKind.Cargo;
+                PayloadKind kind = _flight != null ? _flight.EffectivePayloadKind : PayloadKind.Cargo;
                 SetUpFallingPhysics(dropped.transform, armed, Mathf.Max(0.1f, massPerStore), kind);
                 store.gameObject.SetActive(false);
             }
@@ -156,76 +199,83 @@ namespace AeroTerra.Drone
             rb.angularDamping = 0.25f; // realistic tumble decay in air
 
             // A real release isn't just "same velocity as the carrier" — it separates
-            // with a small downward kick relative to the drone, and tumbles instead of
+            // with a clear downward kick relative to the drone, and tumbles instead of
             // falling perfectly stable, which is what actually reads as "dropped" rather
-            // than "instantly teleported to an identical, parallel trajectory."
+            // than "instantly teleported to an identical, parallel trajectory." Strong
+            // enough that it visibly clears the pylon/belly before gravity takes over.
             Vector3 carrierVelocity = _droneRb != null ? _droneRb.linearVelocity : Vector3.zero;
-            rb.linearVelocity = carrierVelocity - transform.up * 1.2f;
+            rb.linearVelocity = carrierVelocity - transform.up * 2.2f;
             rb.angularVelocity = new Vector3(
                 Random.Range(-2.5f, 2.5f), Random.Range(-2.5f, 2.5f), Random.Range(-2.5f, 2.5f));
 
+            BoxCollider col = null;
             var rends = dropped.GetComponentsInChildren<Renderer>();
             if (rends.Length > 0)
             {
                 var bounds = rends[0].bounds;
                 foreach (var r in rends) bounds.Encapsulate(r.bounds);
-                var col = dropped.gameObject.AddComponent<BoxCollider>();
+                col = dropped.gameObject.AddComponent<BoxCollider>();
                 col.center = dropped.InverseTransformPoint(bounds.center);
                 Vector3 scale = dropped.lossyScale;
                 col.size = new Vector3(
                     scale.x != 0f ? bounds.size.x / scale.x : bounds.size.x,
                     scale.y != 0f ? bounds.size.y / scale.y : bounds.size.y,
                     scale.z != 0f ? bounds.size.z / scale.z : bounds.size.z);
+
+                // Without this, the dropped object's brand-new collider starts out
+                // touching/overlapping the drone's own body/rotor colliders (it's
+                // instantiated right at the pylon mount) and Unity registers an
+                // immediate self-collision the instant physics ticks — which used to
+                // detonate the bomb (and ShakeFromPoint/AddExplosionForce the drone
+                // that just dropped it) right at the moment of release instead of at
+                // actual ground impact. Explicitly exempting every drone collider fixes
+                // the drop animation, the release-time camera shake/kick, AND the
+                // "explodes immediately instead of on the ground" bug all at once —
+                // they were the same root cause.
+                foreach (var droneCol in _droneColliders)
+                    if (droneCol != null) Physics.IgnoreCollision(col, droneCol, true);
             }
 
             dropped.gameObject.AddComponent<DroppedPayloadAerodynamics>().Kind = kind;
-            if (armed) AttachFallTrail(dropped);
 
             var impact = dropped.gameObject.AddComponent<DroppedPayloadImpact>();
             impact.Explosive = armed;
             impact.Kind = kind;
-            Destroy(dropped.gameObject, DespawnDelaySec);
+            impact.MassKg = massKg;
+
+            // Size the despawn safety-net off the ACTUAL distance to the ground below
+            // the drop point rather than a flat 12s — a high-altitude drop (this
+            // airframe flies up to MaxAltitudeM) can take well over 12s of real gravity
+            // to actually reach the ground, and the old fixed timer would silently
+            // despawn the munition first — no explosion at all, ever, from altitude.
+            Destroy(dropped.gameObject, EstimateFallSafetyDelay(dropped.position, col));
         }
 
-        /// <summary>Thin grey vapor trail streaming off an armed munition as it falls —
-        /// makes the drop readable from the chase camera all the way to impact.</summary>
-        private static void AttachFallTrail(Transform dropped)
+        /// <summary>Ballistic estimate (time = sqrt(2h/g), plus a flat margin) of how long
+        /// this drop needs before its despawn safety-net can fire without cutting off a
+        /// real fall still in progress — raycasts straight down from the release point
+        /// to measure actual ground clearance, skipping the drone's own colliders and the
+        /// dropped object's own (freshly added, so it can't be hit by anything yet, but
+        /// excluded defensively) collider so neither can be mistaken for "the ground."
+        /// Falls back to the old flat delay if the raycast finds no ground within range
+        /// (e.g. dropped out over open water/void), so it still despawns eventually
+        /// rather than living forever.</summary>
+        private float EstimateFallSafetyDelay(Vector3 dropPosition, Collider droppedCollider)
         {
-            var go = new GameObject("FallTrail");
-            go.transform.SetParent(dropped, false);
-            var ps = go.AddComponent<ParticleSystem>();
+            const float gravity = 9.81f, safetyMarginSec = 3f, maxRayDistance = 6000f;
+            float closest = float.MaxValue;
+            foreach (var hit in Physics.RaycastAll(dropPosition, Vector3.down, maxRayDistance))
+            {
+                if (hit.collider == droppedCollider || hit.distance >= closest) continue;
+                bool isDrone = false;
+                foreach (var droneCol in _droneColliders)
+                    if (droneCol == hit.collider) { isDrone = true; break; }
+                if (!isDrone) closest = hit.distance;
+            }
+            if (closest >= float.MaxValue) return DespawnDelaySec;
 
-            var main = ps.main;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 1.0f);
-            main.startSpeed = 0f;
-            main.startSize = new ParticleSystem.MinMaxCurve(0.12f, 0.25f);
-            main.startColor = new ParticleSystem.MinMaxGradient(
-                new Color(0.75f, 0.75f, 0.75f, 0.4f), new Color(0.55f, 0.55f, 0.55f, 0.3f));
-            main.simulationSpace = ParticleSystemSimulationSpace.World;
-            // parent clone can be arbitrarily scaled (WingspanM) — keep puffs world-sized
-            main.scalingMode = ParticleSystemScalingMode.Local;
-
-            var emission = ps.emission;
-            emission.rateOverTime = 0f;
-            emission.rateOverDistance = 6f;
-
-            var sol = ps.sizeOverLifetime;
-            sol.enabled = true;
-            sol.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0, 0.6f, 1, 2.4f));
-
-            var col = ps.colorOverLifetime;
-            col.enabled = true;
-            var grad = new Gradient();
-            grad.SetKeys(
-                new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.gray, 1f) },
-                new[] { new GradientAlphaKey(0.4f, 0f), new GradientAlphaKey(0f, 1f) });
-            col.color = grad;
-
-            var r = go.GetComponent<ParticleSystemRenderer>();
-            r.material = ExplosionEffect.BuildMat(Color.white);
-            r.renderMode = ParticleSystemRenderMode.Billboard;
-
-            ps.Play();
+            float fallTime = Mathf.Sqrt(2f * Mathf.Max(1f, closest) / gravity);
+            return Mathf.Max(DespawnDelaySec, fallTime + safetyMarginSec);
         }
 
         private void FinishReload()
@@ -252,7 +302,26 @@ namespace AeroTerra.Drone
     {
         public bool Explosive;
         public PayloadKind Kind;
+        /// <summary>Weight of this specific dropped store — set by PayloadDropper right
+        /// after AddComponent, same as Explosive/Kind — drives BaseBlastScale below so
+        /// heavier munitions read as visibly bigger blasts, not a flat one-size-fits-all
+        /// explosion regardless of what was actually dropped.</summary>
+        public float MassKg;
         private bool _handled;
+
+        /// <summary>Small/medium/huge blast tiers by weight rather than a continuous
+        /// formula — deliberately discrete so e.g. AT-R4 Hornet's three drop-munition
+        /// weight options (0.5 / 1 / 1.5 kg) read as three clearly distinct explosion
+        /// sizes rather than a barely-noticeable gradient. Heavier warheads from other
+        /// airframes (Kestrel/Bison, several kg+) land in the huge tier by default,
+        /// which is the right side to err on for something that heavy.</summary>
+        private float BaseBlastScale => MassKg switch
+        {
+            <= 0f => 1f,      // no weight recorded (shouldn't happen) — old flat default
+            <= 0.6f => 0.5f,  // small
+            <= 1.1f => 1.25f, // medium
+            _ => 2.0f,        // huge
+        };
 
         private void OnCollisionEnter(Collision collision)
         {
@@ -265,9 +334,9 @@ namespace AeroTerra.Drone
                 // Register the fire first: repeat hits merge into the existing site
                 // and its grown Intensity feeds back into a bigger blast.
                 var site = FireSite.RegisterHit(point);
-                ExplosionEffect.Spawn(point, 1f + 0.25f * (site.Intensity - 1));
+                ExplosionEffect.Spawn(point, BaseBlastScale + 0.25f * (site.Intensity - 1));
                 float pitch = Kind switch { PayloadKind.Warhead => 0.75f, PayloadKind.GuidedAmmunition => 1.15f, _ => 1f };
-                AeroTerra.Core.AudioManager.Instance?.PlayBombExplosion(point, pitch);
+                AeroTerra.Core.AudioManager.Instance?.PlayTieredExplosion(point, pitch, MassKg);
                 Destroy(gameObject);
             }
             else

@@ -85,8 +85,14 @@ namespace AeroTerra.Procedural
                 var flight = model.AddComponent<DroneFlightController>();
                 flight.Spec = spec;
                 flight.ExtraLoadoutMassKg = custom != null
-                    ? (custom.SmokeScreenEquipped ? LoadoutExtras.SmokeScreenKg : 0f) + LoadoutExtras.CommsWeightKg(custom.Comms)
+                    ? (custom.SmokeScreenEquipped ? LoadoutExtras.SmokeScreenKg : 0f)
+                      + LoadoutExtras.CommsWeightKg(custom.Comms)
+                      + (custom.ParachuteEquipped ? LoadoutExtras.ParachuteKg : 0f)
+                      + (custom.AiSensorEquipped ? LoadoutExtras.AiSensorKg : 0f)
                     : 0f;
+                flight.HasParachute = custom != null && custom.ParachuteEquipped;
+                flight.EffectivePayloadKind = custom != null && custom.HasSelectedPayloadKind
+                    ? custom.SelectedPayloadKind : spec.PayloadKind;
 
                 if (spec.PowerSystem == PowerSystemType.Fuel)
                 {
@@ -121,6 +127,12 @@ namespace AeroTerra.Procedural
                 {
                     var smoke = BuildSmokeScreen(model.transform);
                     model.AddComponent<SmokeScreenController>().Configure(smoke);
+                }
+
+                if (custom != null && custom.ParachuteEquipped)
+                {
+                    var canopy = BuildParachuteVisual(model.transform);
+                    model.AddComponent<ParachuteController>().Configure(canopy, flight);
                 }
             }
             return model;
@@ -168,6 +180,55 @@ namespace AeroTerra.Procedural
             r.renderMode = ParticleSystemRenderMode.Billboard;
 
             return ps;
+        }
+
+        /// <summary>Procedural recovery-parachute canopy + shroud lines for the
+        /// Workshop's "Parachute" loadout item — no imported mesh/sprite, same "plain
+        /// primitives" approach every other model/effect in this project uses. Built
+        /// once at spawn time, collapsed to zero scale (ParachuteController animates it
+        /// open on deploy — see DeployAnimation) and parented under the drone so it
+        /// scales/moves/rotates with it automatically. A flattened Sphere stands in for
+        /// the domed canopy (same "square doubles as circle" convention this codebase's
+        /// other procedural glyphs already use for shapes primitives can't make exactly)
+        /// with a fan of thin Cylinder shroud lines running down to the airframe.</summary>
+        private static Transform BuildParachuteVisual(Transform parent)
+        {
+            var root = new GameObject("ParachuteRoot").transform;
+            root.SetParent(parent, false);
+
+            var canopyMat = ExplosionEffect.BuildMat(new Color(0.85f, 0.16f, 0.14f, 1f));
+            var lineMat = ExplosionEffect.BuildMat(new Color(0.82f, 0.82f, 0.80f, 1f));
+
+            const float canopyHeight = 2.6f, rimHeight = 2.25f, rimRadius = 1.5f;
+
+            var canopy = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            canopy.name = "Canopy";
+            canopy.transform.SetParent(root, false);
+            canopy.transform.localPosition = new Vector3(0f, canopyHeight, 0f);
+            canopy.transform.localScale = new Vector3(rimRadius * 2f, 0.85f, rimRadius * 2f);
+            canopy.GetComponent<Renderer>().sharedMaterial = canopyMat;
+            Object.Destroy(canopy.GetComponent<Collider>());
+
+            const int lineCount = 6;
+            for (int i = 0; i < lineCount; i++)
+            {
+                float ang = i * (360f / lineCount) * Mathf.Deg2Rad;
+                Vector3 rimPoint = new Vector3(Mathf.Cos(ang) * rimRadius, rimHeight, Mathf.Sin(ang) * rimRadius);
+                Vector3 anchor = Vector3.zero; // converges near the airframe's own origin
+                float length = Vector3.Distance(rimPoint, anchor);
+
+                var line = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                line.name = "ShroudLine";
+                line.transform.SetParent(root, false);
+                line.transform.localPosition = (rimPoint + anchor) * 0.5f;
+                line.transform.localRotation = Quaternion.FromToRotation(Vector3.up, rimPoint - anchor);
+                line.transform.localScale = new Vector3(0.02f, length * 0.5f, 0.02f);
+                line.GetComponent<Renderer>().sharedMaterial = lineMat;
+                Object.Destroy(line.GetComponent<Collider>());
+            }
+
+            root.localScale = Vector3.zero; // hidden/collapsed until ParachuteController deploys it
+            return root;
         }
 
         /// <summary>Legacy assets predate ModelKind (default CargoX8) — infer the

@@ -47,9 +47,26 @@ namespace AeroTerra.Drone
         [HideInInspector] public PayloadSystem Payload;
 
         /// <summary>Combined weight of the Workshop's "additional loadout" slots (Smoke
-        /// Screen canister, Comms radio) — set once by DroneFactory.Spawn from the
-        /// CustomDroneData, folded into ApplyMass() like every other loadout choice.</summary>
+        /// Screen canister, Comms radio, Parachute, AI Sensor) — set once by
+        /// DroneFactory.Spawn from the CustomDroneData, folded into ApplyMass() like
+        /// every other loadout choice.</summary>
         [HideInInspector] public float ExtraLoadoutMassKg;
+
+        /// <summary>True if this build has a parachute equipped (CustomDroneData.
+        /// ParachuteEquipped) — set once by DroneFactory.Spawn, same pattern as
+        /// ExtraLoadoutMassKg. Gates ParachuteController's G-key deploy (a drone with
+        /// none fitted has no ParachuteController at all — see DroneFactory.Spawn — but
+        /// this is checked again here as a safety belt against calling DeployParachute
+        /// directly).</summary>
+        [HideInInspector] public bool HasParachute;
+
+        /// <summary>Resolved once by DroneFactory.Spawn — CustomDroneData.
+        /// SelectedPayloadKind if the player picked one from Spec.AvailablePayloadKinds'
+        /// category picker (currently only possible on AT-R4 Hornet), else just
+        /// Spec.PayloadKind unchanged. PayloadDropper reads this instead of
+        /// Spec.PayloadKind directly so a drone with no picker (the other eleven) behaves
+        /// identically to before this field existed.</summary>
+        [HideInInspector] public PayloadKind EffectivePayloadKind;
 
         private Rigidbody _rb;
         private AeroTerra.Input.InputManager _input;
@@ -68,14 +85,26 @@ namespace AeroTerra.Drone
         private const float SeaLevelY = 0f;           // hard floor — altitude (world y) never goes negative
         private const float CeilingBandM = 150f;      // thrust/lift fade band below Spec.MaxAltitudeM
         private const float KamikazeRespawnDelaySec = 2.6f;
-        private const float CrashRespawnDelaySec = 2f;
         private const float BoostFactor = 1.3f;
+        private const float FlipDurationSec = 0.65f; // one full 360° barrel-roll trick
+
+        /// <summary>Minimum altitude (world Y — sea level is 0, same "altitude" convention
+        /// NarratorController's high-altitude check uses) the parachute is allowed to
+        /// deploy at — matches the request's "more than 100m" gate; too low to safely
+        /// inflate below this.</summary>
+        public const float ParachuteMinDeployAltitudeM = 100f;
+        private const float ParachuteTargetDescentMs = -3.5f;   // gentle "under canopy" sink rate
+        private const float ParachuteVerticalConverge = 2.5f;   // how fast vertical speed eases toward the target
+        private const float ParachuteHorizontalDrag = 1.6f;     // bleeds off residual horizontal speed once open
+        private const float ParachuteLevelSpeed = 1.4f;         // how fast attitude settles level under canopy
 
         private const float LandingCooldownSec = 2f; // suppresses repeat fires from resting/jittering ground contact
 
         private float _lastCrashTime = -999f;
         private float _lastLandingTime = -999f;
         private bool _crashRespawnPending;
+        private bool _isFlipping;
+        private float _flipTimer;
 
         /// <summary>Fired on a gentle touchdown (below CrashSpeedThreshold — i.e. NOT a
         /// hard crash), cooldown-gated same as the crash path. Used by FlightLogTracker
@@ -84,6 +113,14 @@ namespace AeroTerra.Drone
         /// taxiing, not just a clean touchdown — there's no separate "on the ground"
         /// state to check against.</summary>
         public event System.Action Landed;
+
+        /// <summary>Fired exactly once per hard crash, at the moment of impact (the
+        /// Vector3 is the impact point) — NOT re-fired while the wreck settles/bounces
+        /// before the player restarts (see the _crashRespawnPending guard in
+        /// OnCollisionEnter). FlightSceneController subscribes to run the crash
+        /// cinematic (camera pull-back, CTA) and calls RespawnAfterCrash() once the
+        /// player presses Space, instead of the old fixed-delay auto-respawn.</summary>
+        public event System.Action<Vector3> Crashed;
         private float _headingDeg;                    // multirotor commanded heading (yaw-rate integrated)
 
         /// <summary>True once a drone that ran out of usable power (battery empty, or
@@ -95,6 +132,11 @@ namespace AeroTerra.Drone
 
         /// <summary>True while a kamikaze airframe is blown up and waiting to respawn.</summary>
         public bool IsDetonated { get; private set; }
+
+        /// <summary>True once the parachute has been deployed this flight (see
+        /// DeployParachute) — from then on FixedUpdate hands off to TickParachuteDescent
+        /// instead of the normal flight-model tick, until the next respawn/reset.</summary>
+        public bool ParachuteDeployed { get; private set; }
 
         public FlightModelType FlightModel { get; private set; }
 
@@ -188,6 +230,7 @@ namespace AeroTerra.Drone
         {
             _headingDeg = transform.eulerAngles.y;
             JustCrashedFromDeadBattery = false;
+            ParachuteDeployed = false;
             // A reset teleports the airframe — wipe any world-space trails so they
             // don't draw a kilometer-long ribbon from the old position to the new.
             foreach (var trail in GetComponentsInChildren<TrailRenderer>()) trail.Clear();
@@ -203,6 +246,20 @@ namespace AeroTerra.Drone
             }
         }
 
+        /// <summary>Deploys the parachute — called by ParachuteController once it's
+        /// confirmed the G-key press, HasParachute, and the altitude gate. From the next
+        /// FixedUpdate on, TickParachuteDescent takes over from the normal flight-model
+        /// tick until the next respawn/reset. The "jerk" of a real canopy snapping open
+        /// is a hard, sudden deceleration — halving whatever velocity the drone had the
+        /// instant it opens, rather than converging from full speed smoothly.</summary>
+        public void DeployParachute()
+        {
+            if (ParachuteDeployed || IsDetonated) return;
+            ParachuteDeployed = true;
+            _isFlipping = false;
+            if (_rb != null) _rb.linearVelocity *= 0.5f;
+        }
+
         private void FixedUpdate()
         {
             if (_input == null || (_power != null && _power.IsEmpty) || IsDetonated)
@@ -214,39 +271,80 @@ namespace AeroTerra.Drone
                 return;
             }
 
-            var axes = _input.ReadFlightAxes();
-            Boosting = _input.BoostHeld && !_input.BrakeHeld;
-            Braking = _input.BrakeHeld;
-
-            float pitch = axes.Pitch * (GameManager.Instance.Settings.InvertPitch ? -1f : 1f);
-            PitchInput = pitch; RollInput = axes.Roll; YawInput = axes.Yaw;
-
-            _batteryPerfFactor = Spec.PowerSystem == PowerSystemType.Battery
-                ? BatterySystem.PerformanceFactor(GameManager.Instance.Settings.TemperatureC) : 1f;
-
-            if (FlightModel == FlightModelType.FixedWing)
-                TickFixedWing(axes, pitch);
+            if (ParachuteDeployed)
+            {
+                // Under canopy: no stick/throttle input, no boost/brake/flip — just the
+                // slow controlled sink TickParachuteDescent drives.
+                PitchInput = RollInput = YawInput = 0f;
+                Boosting = Braking = false;
+                TickParachuteDescent(Time.fixedDeltaTime);
+            }
             else
-                TickMultirotor(axes, pitch);
+            {
+                var axes = _input.ReadFlightAxes();
+                Boosting = _input.BoostHeld && !_input.BrakeHeld;
+                Braking = _input.BrakeHeld;
 
-            // Wind from weather
+                // Boost = instant full-throttle "very fast mode": pressing Shift snaps
+                // throttle to max regardless of what the throttle stick/keys are doing,
+                // stacking with the BoostFactor thrust/speed-ceiling multiplier below.
+                if (Boosting) axes.Throttle = 1f;
+
+                if (!_isFlipping && _input.DroneFlipAction != null && _input.DroneFlipAction.WasPressedThisFrame())
+                {
+                    _isFlipping = true;
+                    _flipTimer = 0f;
+                    _rb.angularVelocity = Vector3.zero;
+                }
+
+                float pitch = axes.Pitch * (GameManager.Instance.Settings.InvertPitch ? -1f : 1f);
+                PitchInput = pitch; RollInput = axes.Roll; YawInput = axes.Yaw;
+
+                _batteryPerfFactor = Spec.PowerSystem == PowerSystemType.Battery
+                    ? BatterySystem.PerformanceFactor(GameManager.Instance.Settings.TemperatureC) : 1f;
+
+                if (_isFlipping)
+                {
+                    _flipTimer += Time.fixedDeltaTime;
+                    if (_flipTimer >= FlipDurationSec) _isFlipping = false;
+                    else TickFlip(Time.fixedDeltaTime);
+                }
+                if (!_isFlipping)
+                {
+                    if (FlightModel == FlightModelType.FixedWing)
+                        TickFixedWing(axes, pitch);
+                    else
+                        TickMultirotor(axes, pitch);
+                }
+            }
+
+            // Wind from weather — still applies under canopy, in fact a parachute
+            // should read as more wind-affected than powered flight, not less.
             if (WeatherSystem.Instance != null)
                 _rb.AddForce(WeatherSystem.Instance.CurrentWind, ForceMode.Force);
 
-            // Speed clamp (boost stretches it)
-            float maxMs = Spec.MaxSpeedKmh / 3.6f * (Boosting ? BoostFactor : 1f);
-            if (_rb.linearVelocity.magnitude > maxMs)
-                _rb.linearVelocity = _rb.linearVelocity.normalized * maxMs;
+            // Speed clamp (boost stretches it) — skipped under canopy, where
+            // TickParachuteDescent already converges to its own much slower target speed.
+            if (!ParachuteDeployed)
+            {
+                float maxMs = Spec.MaxSpeedKmh / 3.6f * (Boosting ? BoostFactor : 1f);
+                if (_rb.linearVelocity.magnitude > maxMs)
+                    _rb.linearVelocity = _rb.linearVelocity.normalized * maxMs;
+            }
 
             EnforceAltitudeFloor();
 
             // Power drain: base cruise + throttle load, scaled by payload mass ratio;
             // boosting burns noticeably hotter. Same Watts figure feeds either a
             // BatterySystem or a FuelSystem via the shared IPowerSource contract.
-            float loadFactor = _rb.mass / Mathf.Max(0.1f, Spec.EmptyMassKg);
-            float watts = (Spec.CruisePowerW + Spec.PowerPerThrottleW * Throttle01) * loadFactor
-                        * (Boosting ? 1.5f : 1f);
-            _power?.Drain(watts, Time.fixedDeltaTime);
+            // Skipped under canopy — the motors are off, nothing draws power.
+            if (!ParachuteDeployed)
+            {
+                float loadFactor = _rb.mass / Mathf.Max(0.1f, Spec.EmptyMassKg);
+                float watts = (Spec.CruisePowerW + Spec.PowerPerThrottleW * Throttle01) * loadFactor
+                            * (Boosting ? 1.5f : 1f);
+                _power?.Drain(watts, Time.fixedDeltaTime);
+            }
         }
 
         /// <summary>0 → at/above the service ceiling, 1 → below the fade band. Scales
@@ -265,6 +363,48 @@ namespace AeroTerra.Drone
             transform.position = p;
             var v = _rb.linearVelocity;
             if (v.y < 0f) { v.y = 0f; _rb.linearVelocity = v; }
+        }
+
+        // ------------------------------------------------------------------
+        // Drone Flip: scripted trick, bypasses the normal attitude controller for
+        // FlipDurationSec so the imparted spin isn't immediately fought and cancelled
+        // — every flight model shares this, then falls back into its own Tick* method
+        // (which self-levels from whatever attitude the flip left it in) once it ends.
+        // ------------------------------------------------------------------
+        private void TickFlip(float dt)
+        {
+            float rateDeg = 360f / FlipDurationSec;
+            _rb.MoveRotation(_rb.rotation * Quaternion.Euler(rateDeg * dt, 0, 0));
+            // Roughly hover-equivalent thrust so the trick doesn't just free-fall —
+            // reads as an assisted flip, not a loss of control.
+            float hoverN = _rb.mass * Physics.gravity.magnitude;
+            _rb.AddForce(transform.up * Mathf.Min(hoverN, Spec.MaxThrustN * _batteryPerfFactor), ForceMode.Force);
+            PitchInput = 1f; RollInput = 0f; YawInput = 0f;
+        }
+
+        // ------------------------------------------------------------------
+        // Parachute descent: motors off, hanging under canopy. Bypasses the normal
+        // flight-model tick entirely (like TickFlip) for any airframe, multirotor or
+        // fixed-wing alike — a deployed canopy overrides however this drone would
+        // otherwise fly. Vertical speed eases toward a slow, safe sink rate; residual
+        // horizontal speed bleeds off under canopy drag; attitude settles level, like a
+        // real canopy swinging to rest overhead. No player input applies once deployed.
+        // ------------------------------------------------------------------
+        private void TickParachuteDescent(float dt)
+        {
+            Vector3 v = _rb.linearVelocity;
+            v.y = Mathf.Lerp(v.y, ParachuteTargetDescentMs, dt * ParachuteVerticalConverge);
+            float horizontalDamp = Mathf.Clamp01(1f - dt * ParachuteHorizontalDrag);
+            v.x *= horizontalDamp;
+            v.z *= horizontalDamp;
+            _rb.linearVelocity = v;
+            _rb.angularVelocity = Vector3.Lerp(_rb.angularVelocity, Vector3.zero, dt * ParachuteLevelSpeed);
+
+            Vector3 flatForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+            Quaternion level = flatForward.sqrMagnitude > 0.001f
+                ? Quaternion.LookRotation(flatForward.normalized, Vector3.up)
+                : transform.rotation;
+            transform.rotation = Quaternion.Slerp(transform.rotation, level, dt * ParachuteLevelSpeed);
         }
 
         // ------------------------------------------------------------------
@@ -334,7 +474,10 @@ namespace AeroTerra.Drone
                 thrustDemandN -= wingLiftN;
             }
 
-            float thrustN = Mathf.Clamp(thrustDemandN, 0f, Spec.MaxThrustN * boost * _batteryPerfFactor);
+            // Brake = full emergency motor cutoff, not just a hover-hold: thrust drops
+            // to zero and gravity takes over, so holding Space actually drops the
+            // drone instead of just parking it in place.
+            float thrustN = Braking ? 0f : Mathf.Clamp(thrustDemandN, 0f, Spec.MaxThrustN * boost * _batteryPerfFactor);
             _rb.AddForce(transform.up * thrustN, ForceMode.Force);
             Throttle01 = Mathf.Clamp01(thrustN / Mathf.Max(1f, Spec.MaxThrustN));
 
@@ -360,8 +503,10 @@ namespace AeroTerra.Drone
             float stallMs = maxMs * 0.26f;
 
             // ---- Engine: W/S trims a persistent power setting (idle keeps the prop
-            // turning; a plane never zeroes its throttle mid-air by tapping S) ----
-            Throttle01 = Mathf.Clamp(Throttle01 + axes.Throttle * dt * 0.5f, 0.12f, 1f);
+            // turning; a plane never zeroes its throttle mid-air by tapping S). Boost
+            // snaps straight to full power instead of ramping through the trim rate —
+            // "very fast mode" should feel instant, not a two-second spool-up.
+            Throttle01 = Boosting ? 1f : Mathf.Clamp(Throttle01 + axes.Throttle * dt * 0.5f, 0.12f, 1f);
             float thrustN = Throttle01 * Spec.MaxThrustN * (Boosting ? BoostFactor : 1f) * CeilingFactor() * _batteryPerfFactor;
             _rb.AddForce(transform.forward * thrustN, ForceMode.Force);
 
@@ -424,11 +569,6 @@ namespace AeroTerra.Drone
 
         private bool IsKamikaze => Spec.IsKamikazeClass;
 
-        /// <summary>Civilian airframes (cargo, racing, survey, VTOL logistics, camera
-        /// quad) never get pyrotechnics — explosions on crash/drop are strictly a
-        /// military-drone thing (see DroneSpecification.IsMilitaryClass).</summary>
-        private bool IsMilitary => Spec.IsMilitaryClass;
-
         private void OnCollisionEnter(Collision collision)
         {
             // Out of power, and this is the touchdown that ends the flight — flag it
@@ -458,51 +598,51 @@ namespace AeroTerra.Drone
             }
             if (Time.time - _lastCrashTime < CrashCooldownSec) return;
             _lastCrashTime = Time.time;
+            // Already mid-crash (waiting on the player's restart) — a settling/bouncing
+            // wreck re-colliding with the ground shouldn't re-trigger the whole sequence
+            // (explosion/narrator/CTA) a second time before the first one resolves.
+            if (_crashRespawnPending) return;
+
             AeroTerra.UI.NarratorController.Instance?.NotifyCrashed();
 
-            if (IsMilitary)
-            {
-                // Crashing into an already-burning site feeds the fire and scales the
-                // blast, same stacking rule as dropped ordnance (DroppedPayloadImpact).
-                var site = FireSite.RegisterHit(point);
-                ExplosionEffect.Spawn(point, 1f + 0.25f * (site.Intensity - 1));
-                AeroTerra.Core.AudioManager.Instance?.PlayBombExplosion(point);
-            }
-            else
-            {
-                // Cargo / racing drones just thud down in a dust cloud.
-                ExplosionEffect.SpawnDustPuff(point);
-                AeroTerra.Core.AudioManager.Instance?.PlayImpactThud(point);
-                AeroTerra.UI.DroneCameraRig.Instance?.Shake(0.25f, 0.35f);
-            }
+            // Every hard crash — civilian or military — gets the full fire/smoke/blast
+            // treatment now (previously only military airframes did; civilians just got
+            // a dust puff): a real crash should read as dramatic regardless of drone
+            // class. Crashing into an already-burning site feeds the fire and scales the
+            // blast further, same stacking rule dropped ordnance already used.
+            var site = FireSite.RegisterHit(point);
+            ExplosionEffect.Spawn(point, 1.6f + 0.25f * (site.Intensity - 1));
+            AeroTerra.Core.AudioManager.Instance?.PlayBombExplosion(point);
+            AeroTerra.Core.AudioManager.Instance?.PlayDroneCrashExplosion(point);
 
             // Unlike a kamikaze detonation, a regular hard crash doesn't hide/freeze the
-            // airframe — it just sits there afterward. Free Flight has no permadeath, so
-            // auto-respawn it at the map's spawn point instead of leaving the player to
-            // notice and press R. Skipped if the crash was the dead-battery touchdown
-            // (JustCrashedFromDeadBattery) — FlightSceneController is about to freeze
-            // Time.timeScale and show the end-of-flight modal, so respawning here would
-            // just be a drone popping back up under a "game over" screen.
-            if (!JustCrashedFromDeadBattery && !_crashRespawnPending)
+            // airframe — it just sits there afterward, burning, while FlightSceneController
+            // runs the crash cinematic (camera pull-back) and shows a PRESS SPACE TO
+            // RESTART prompt — see the Crashed event. Skipped if the crash was the
+            // dead-battery touchdown (JustCrashedFromDeadBattery) — FlightSceneController
+            // is about to freeze Time.timeScale and show the end-of-flight modal instead,
+            // so a crash CTA here would just fight that screen.
+            if (!JustCrashedFromDeadBattery)
             {
                 _crashRespawnPending = true;
-                StartCoroutine(RespawnAfterCrash());
+                Crashed?.Invoke(point);
             }
         }
 
-        /// <summary>2 seconds after a hard (non-kamikaze) crash, teleport back to the
-        /// map's spawn point/heading — same target every other respawn path uses
-        /// (RespawnAfterDetonation, FlightSceneController.ResetDrone). No hide/freeze/
-        /// unhide dance here since a regular crash never hid the airframe or froze its
-        /// physics to begin with.</summary>
-        private IEnumerator RespawnAfterCrash()
+        /// <summary>Teleports back to the map's spawn point/heading — same target every
+        /// other respawn path uses (RespawnAfterDetonation, FlightSceneController.
+        /// ResetDrone). Called by FlightSceneController the instant the player presses
+        /// Space on the post-crash "PRESS SPACE TO RESTART" prompt (see the Crashed
+        /// event) — no fixed delay of its own; the cinematic pull-back + CTA fade-in are
+        /// what give the moment its pacing instead. No hide/freeze/unhide dance here
+        /// since a regular crash never hid the airframe or froze its physics to begin
+        /// with.</summary>
+        public void RespawnAfterCrash()
         {
-            yield return new WaitForSeconds(CrashRespawnDelaySec);
-
-            var map = GameManager.Instance != null ? GameManager.Instance.SelectedMap : null;
-            float alt = (float)(map?.SpawnAltitudeMeters ?? 150);
-            float heading = map?.SpawnHeadingDeg ?? 0f;
-            transform.SetPositionAndRotation(new Vector3(0, alt, 0), Quaternion.Euler(0, heading, 0));
+            var gm = GameManager.Instance;
+            Vector3 pos = gm != null ? gm.SpawnLocalPosition : new Vector3(0, 150f, 0);
+            float heading = gm != null ? (gm.SelectedMap?.SpawnHeadingDeg ?? 0f) : 0f;
+            transform.SetPositionAndRotation(pos, Quaternion.Euler(0, heading, 0));
 
             _rb.linearVelocity = Vector3.zero;
             _rb.angularVelocity = Vector3.zero;
@@ -543,10 +683,10 @@ namespace AeroTerra.Drone
         {
             yield return new WaitForSeconds(KamikazeRespawnDelaySec);
 
-            var map = GameManager.Instance != null ? GameManager.Instance.SelectedMap : null;
-            float alt = (float)(map?.SpawnAltitudeMeters ?? 150);
-            float heading = map?.SpawnHeadingDeg ?? 0f;
-            transform.SetPositionAndRotation(new Vector3(0, alt, 0), Quaternion.Euler(0, heading, 0));
+            var gm = GameManager.Instance;
+            Vector3 pos = gm != null ? gm.SpawnLocalPosition : new Vector3(0, 150f, 0);
+            float heading = gm != null ? (gm.SelectedMap?.SpawnHeadingDeg ?? 0f) : 0f;
+            transform.SetPositionAndRotation(pos, Quaternion.Euler(0, heading, 0));
 
             _rb.isKinematic = false;
             _rb.linearVelocity = Vector3.zero;

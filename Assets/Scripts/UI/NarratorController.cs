@@ -39,6 +39,8 @@ namespace AeroTerra.UI
         private const float CrashNotifyCooldownSec = 2f;
         private const float PayloadNotifyCooldownSec = 4f;  // debounces multi-hardpoint drop bursts
 
+        private const float InternetCheckIntervalSec = 300f; // 5 minutes
+
         private SubtitleUI _subtitles;
         private DroneFlightController _flight;
 
@@ -71,6 +73,8 @@ namespace AeroTerra.UI
             var weather = GameManager.Instance.Settings.Weather;
             string weatherPath = AudioManager.WeatherVoiceLinePath(weather);
             if (weatherPath != null) Enqueue(weatherPath, WeatherSubtitle(weather));
+
+            StartCoroutine(InternetWatchdog());
         }
 
         private void OnDestroy()
@@ -117,6 +121,33 @@ namespace AeroTerra.UI
             if (Time.unscaledTime - _lastPayloadNotifyTime < PayloadNotifyCooldownSec) return;
             _lastPayloadNotifyTime = Time.unscaledTime;
             Enqueue("Audio/voices/open-fly/voice_4", "Cargo delivered. Somehow, it arrived in one piece.");
+        }
+
+        /// <summary>Connectivity dropped — called from InternetWatchdog every time a
+        /// 5-minute check finds the connection down (including repeatedly while it
+        /// stays down, per design: the point is reminding the player their map tiles
+        /// may be stale/missing, not a one-shot lifetime notice). No cooldown guard
+        /// here beyond the watchdog's own interval — Enqueue's shared queue already
+        /// prevents it from overlapping other narration.</summary>
+        public void NotifyNoInternet()
+        {
+            Enqueue("Audio/voices/general/no_internet",
+                "Internet connection lost. Check your connection to ensure the maps load properly.");
+        }
+
+        /// <summary>Checks Application.internetReachability immediately on flight start
+        /// (so an already-offline session gets flagged right away) and then every
+        /// InternetCheckIntervalSec thereafter for as long as this component lives —
+        /// unscaled real time so the check keeps firing even while the pause menu has
+        /// Time.timeScale at 0, same convention as every other timer in this class.</summary>
+        private IEnumerator InternetWatchdog()
+        {
+            while (true)
+            {
+                if (Application.internetReachability == NetworkReachability.NotReachable)
+                    NotifyNoInternet();
+                yield return new WaitForSecondsRealtime(InternetCheckIntervalSec);
+            }
         }
 
         private void Update()

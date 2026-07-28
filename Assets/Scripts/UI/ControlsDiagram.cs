@@ -5,8 +5,9 @@ using static AeroTerra.UI.UIBuilder;
 namespace AeroTerra.UI
 {
     /// <summary>
-    /// "How to play" graphic per control scheme, drawn with UI primitives —
-    /// keycaps, a stylized gamepad, and a tilting phone for gyroscope.
+    /// "How to play" graphic per control scheme, drawn with UI primitives — a
+    /// stylized gamepad and a tilting phone for gyroscope. Keyboard has its own,
+    /// much more detailed diagram — see KeyboardDiagram.
     /// </summary>
     public static class ControlsDiagram
     {
@@ -14,19 +15,6 @@ namespace AeroTerra.UI
         {
             switch (scheme)
             {
-                case ControlScheme.Keyboard:
-                    Title(area, "KEYBOARD");
-                    Key(area, "W", 0.28f, 0.68f); Key(area, "S", 0.28f, 0.50f);
-                    Key(area, "A", 0.16f, 0.50f); Key(area, "D", 0.40f, 0.50f);
-                    Note(area, "W/S pitch fwd/back · A/D roll left/right", 0.05f, 0.36f);
-                    Key(area, "▲", 0.72f, 0.68f); Key(area, "▼", 0.72f, 0.50f);
-                    Note(area, "Arrows: throttle up/down", 0.55f, 0.36f);
-                    Note(area, "Q: alt forward key", 0.05f, 0.20f);
-                    Note(area, "K: alt roll-right key", 0.55f, 0.20f);
-                    Note(area, "SHIFT boost · SPACE brake/hover", 0.05f, 0.08f);
-                    Note(area, "C camera · R reset · ESC pause · F8 photo mode", 0.55f, 0.08f);
-                    break;
-
                 case ControlScheme.Gamepad:
                     Title(area, "GAMEPAD");
                     Stick(area, 0.25f, 0.55f, "L");
@@ -52,14 +40,6 @@ namespace AeroTerra.UI
 
         private static void Note(RectTransform a, string t, float x, float y) =>
             Label(a, t, 16, new Vector2(x, y), new Vector2(x + 0.42f, y + 0.14f), TextDim);
-
-        private static void Key(RectTransform a, string k, float x, float y)
-        {
-            var rt = Panel_(a, "Key", PanelAlt, new Vector2(x, y), new Vector2(x + 0.11f, y + 0.15f));
-            rt.gameObject.GetComponent<UnityEngine.UI.Image>().color = new Color(0.2f, 0.25f, 0.33f);
-            Label(rt, k, 22, Vector2.zero, Vector2.one, TextMain, TMPro.TextAlignmentOptions.Center,
-                  TMPro.FontStyles.Bold);
-        }
 
         private static void Stick(RectTransform a, float x, float y, string label)
         {

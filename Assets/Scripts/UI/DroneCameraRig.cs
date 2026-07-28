@@ -64,6 +64,17 @@ namespace AeroTerra.UI
 
         private float _shakeMagnitude, _shakeDuration, _shakeTimer;
 
+        // Speed Blur — see ApplySpeedBlur. Ramps in only after SpeedBlurSustainSec
+        // spent at/above SpeedBlurThreshold of top speed (a brief burst shouldn't
+        // trigger it), and only when Graphics Quality is High/Ultra.
+        private Volume _speedBlurVolume;
+        private MotionBlur _speedBlurMotion;
+        private float _speedBlurTimer;
+        private const float SpeedBlurThreshold = 0.8f;
+        private const float SpeedBlurSustainSec = 1.2f;
+        private const float SpeedBlurRampSec = 0.6f;
+        private const float SpeedBlurMaxIntensity = 0.55f;
+
         // Photo mode — see TogglePhotoMode/UpdatePhotoMode.
         private bool _photoActive;
         private CamMode _prePhotoMode;
@@ -75,6 +86,17 @@ namespace AeroTerra.UI
         private const float PhotoLookSensitivity = 0.15f;
         private const float PhotoFovMin = 20f, PhotoFovMax = 100f;
         private const float PhotoExposureMin = -3f, PhotoExposureMax = 3f;
+
+        // Crash cam — see PlayCrashSequence/EndCrashSequence/UpdateCrashCam. Takes over
+        // completely (bypasses Target-follow and every other mode) the instant a hard
+        // crash fires, and pulls away from the wreck for a cinematic beat while
+        // FlightSceneController shows the PRESS SPACE TO RESTART prompt.
+        private bool _crashCamActive;
+        private float _crashCamTimer;
+        private Vector3 _crashCamStartPos, _crashCamPoint, _crashCamAwayDir;
+        private const float CrashCamDurationSec = 3.5f;
+        private const float CrashCamPullDistanceM = 26f;
+        private const float CrashCamPullHeightM = 14f;
 
         private void Awake() => Instance = this;
 
@@ -142,6 +164,26 @@ namespace AeroTerra.UI
             _photoVolume.isGlobal = true;
             _photoVolume.weight = 0f;
             _photoVolume.profile = photoProfile;
+
+            // Speed Blur: stock URP MotionBlur (camera-only mode — reprojects the
+            // camera's own motion, which reads well from a chase cam that's translating
+            // fast through the world). Weight stays at 1 permanently — this volume is
+            // dedicated to motion blur alone, so nothing else can fight it — and
+            // ApplySpeedBlur dials the actual strength via intensity instead, since that
+            // needs a continuous ramp rather than the thermal/photo volumes' 0/1 toggle.
+            var speedBlurProfile = ScriptableObject.CreateInstance<VolumeProfile>();
+            _speedBlurMotion = speedBlurProfile.Add<MotionBlur>(true);
+            _speedBlurMotion.mode.Override(MotionBlurMode.CameraOnly);
+            _speedBlurMotion.quality.Override(MotionBlurQuality.High);
+            _speedBlurMotion.intensity.Override(0f);
+            _speedBlurMotion.clamp.Override(0.12f);
+
+            var speedBlurGo = new GameObject("SpeedBlurVolume");
+            speedBlurGo.transform.SetParent(transform, false);
+            _speedBlurVolume = speedBlurGo.AddComponent<Volume>();
+            _speedBlurVolume.isGlobal = true;
+            _speedBlurVolume.weight = 1f;
+            _speedBlurVolume.profile = speedBlurProfile;
         }
 
         private void Update()
@@ -311,6 +353,7 @@ namespace AeroTerra.UI
 
         private void LateUpdate()
         {
+            if (_crashCamActive) { UpdateCrashCam(); return; }
             if (Target == null) return;
             if (!_configured) ConfigureForTarget();
 
@@ -374,6 +417,7 @@ namespace AeroTerra.UI
 
             ApplySpeedFov();
             ApplyShake();
+            ApplySpeedBlur();
         }
 
         /// <summary>Photo mode's per-frame drive: right-mouse-held look (yaw/pitch, no
@@ -439,6 +483,34 @@ namespace AeroTerra.UI
             _cam.fieldOfView = Mathf.Lerp(_cam.fieldOfView, targetFov, Time.deltaTime * 3f);
         }
 
+        /// <summary>"Speed Blur": ramps a URP MotionBlur volume in once the drone has
+        /// been flying at or above SpeedBlurThreshold (80%) of its top speed for
+        /// SpeedBlurSustainSec — a brief burst through that band (e.g. clipping past it
+        /// mid-maneuver) doesn't trigger it, only genuinely sustained fast flight does —
+        /// then fades it back out at twice the ramp rate the moment speed drops or the
+        /// player throttles back. Gated entirely behind Settings ▸ Video ▸ Graphics
+        /// Quality being High or Ultra: on Low/Medium the timer never advances and
+        /// intensity decays straight to (and stays at) zero, so the extra full-screen
+        /// post-process cost is only ever paid on the tiers meant to afford it.</summary>
+        private void ApplySpeedBlur()
+        {
+            if (_speedBlurMotion == null) return;
+            if (_flight == null) _flight = Target.GetComponent<AeroTerra.Drone.DroneFlightController>();
+
+            bool qualityOk = GameManager.Instance != null
+                           && GameManager.Instance.Settings.Quality >= GraphicsQuality.High;
+            bool fast = qualityOk && _flight != null && _flight.Spec != null
+                     && _flight.CurrentSpeedKmh / Mathf.Max(1f, _flight.Spec.MaxSpeedKmh) >= SpeedBlurThreshold;
+
+            float maxTimer = SpeedBlurSustainSec + SpeedBlurRampSec;
+            _speedBlurTimer = fast
+                ? Mathf.Min(_speedBlurTimer + Time.deltaTime, maxTimer)
+                : Mathf.Max(_speedBlurTimer - Time.deltaTime * 2f, 0f);
+
+            float active01 = Mathf.Clamp01((_speedBlurTimer - SpeedBlurSustainSec) / SpeedBlurRampSec);
+            _speedBlurMotion.intensity.Override(Mathf.Lerp(0f, SpeedBlurMaxIntensity, active01));
+        }
+
         /// <summary>Starts (or, if already shaking harder, ignores) a decaying camera
         /// shake. Call directly for a shake with a known strength (e.g. a hard crash
         /// under the drone itself); call ShakeFromPoint for a shake that should fall
@@ -471,6 +543,50 @@ namespace AeroTerra.UI
                                  + transform.up * (Random.Range(-1f, 1f) * amt * 0.3f);
             transform.rotation *= Quaternion.Euler(
                 Random.Range(-1f, 1f) * amt * 2.5f, Random.Range(-1f, 1f) * amt * 2.5f, 0f);
+        }
+
+        /// <summary>Called by FlightSceneController the instant DroneFlightController.
+        /// Crashed fires — takes over the camera completely (LateUpdate bypasses Target-
+        /// follow entirely while this is active, see the top of LateUpdate) and eases it
+        /// away from the wreck: a receding, rising dolly shot that keeps the fireball
+        /// framed while putting distance between the camera and it, exactly "the camera
+        /// moves from the crash out." The pull-back direction is derived from wherever
+        /// the camera already was relative to the crash point (not a fixed compass
+        /// direction), so the cut into this mode reads as a continuation of the shot
+        /// rather than a jarring snap to an arbitrary angle.</summary>
+        public void PlayCrashSequence(Vector3 crashPoint)
+        {
+            _crashCamActive = true;
+            _crashCamTimer = 0f;
+            _crashCamStartPos = transform.position;
+            _crashCamPoint = crashPoint;
+
+            Vector3 away = transform.position - crashPoint;
+            away.y = 0f;
+            _crashCamAwayDir = away.sqrMagnitude > 1f ? away.normalized : -transform.forward;
+        }
+
+        /// <summary>Hands the camera back to normal Target-follow — called once the
+        /// player presses Space on the restart prompt. No special "snap back" needed:
+        /// ChaseDefault's own position/rotation Lerp already eases smoothly from
+        /// wherever the crash cam left off toward the freshly respawned drone, the same
+        /// way it recovers from any other large position discontinuity.</summary>
+        public void EndCrashSequence() => _crashCamActive = false;
+
+        private void UpdateCrashCam()
+        {
+            _crashCamTimer += Time.unscaledDeltaTime; // keeps playing even if the CTA freezes Time.timeScale
+            float t = Mathf.Clamp01(_crashCamTimer / CrashCamDurationSec);
+            float eased = 1f - (1f - t) * (1f - t); // ease-out — fast start, settles gently
+
+            Vector3 desired = _crashCamPoint
+                             + _crashCamAwayDir * (6f + CrashCamPullDistanceM * eased)
+                             + Vector3.up * (3f + CrashCamPullHeightM * eased);
+            transform.position = Vector3.Lerp(_crashCamStartPos, desired, eased);
+
+            Vector3 lookDir = (_crashCamPoint + Vector3.up * 2.5f) - transform.position;
+            if (lookDir.sqrMagnitude > 0.01f)
+                transform.rotation = Quaternion.LookRotation(lookDir.normalized, Vector3.up);
         }
     }
 }

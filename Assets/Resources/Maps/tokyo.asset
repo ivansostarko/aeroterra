@@ -20,3 +20,29 @@ MonoBehaviour:
   Longitude: 139.6977
   SpawnAltitudeMeters: 350
   SpawnHeadingDeg: 0
+  SpawnLocations:
+  - Name: Tokyo Tower
+    Latitude: 35.658611
+    Longitude: 139.745556
+    Description: Tower orbit and ascent
+    SpawnAltitudeMeters: 500
+  - Name: Tokyo Skytree
+    Latitude: 35.7101
+    Longitude: 139.8107
+    Description: Extreme-altitude checkpoint
+    SpawnAltitudeMeters: 500
+  - Name: Shibuya Crossing
+    Latitude: 35.6595
+    Longitude: 139.70056
+    Description: Dense urban navigation
+    SpawnAltitudeMeters: 500
+  - Name: Rainbow Bridge
+    Latitude: 35.636389
+    Longitude: 139.763611
+    Description: Bridge and waterfront race
+    SpawnAltitudeMeters: 500
+  - Name: Tokyo Station
+    Latitude: 35.680833
+    Longitude: 139.766944
+    Description: Railway district inspection
+    SpawnAltitudeMeters: 500

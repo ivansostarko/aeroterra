@@ -20,3 +20,29 @@ MonoBehaviour:
   Longitude: 2.1870
   SpawnAltitudeMeters: 350
   SpawnHeadingDeg: 0
+  SpawnLocations:
+  - Name: Sagrada Família
+    Latitude: 41.40369
+    Longitude: 2.17433
+    Description: Landmark orbit and photography
+    SpawnAltitudeMeters: 500
+  - Name: Park Güell
+    Latitude: 41.413611
+    Longitude: 2.152778
+    Description: Terrain-following scenic route
+    SpawnAltitudeMeters: 500
+  - Name: Montjuïc
+    Latitude: 41.364167
+    Longitude: 2.160833
+    Description: Hill climb and descent challenge
+    SpawnAltitudeMeters: 500
+  - Name: Arc de Triomf
+    Latitude: 41.390833
+    Longitude: 2.180556
+    Description: Precision gate fly-through
+    SpawnAltitudeMeters: 500
+  - Name: Torre Glòries
+    Latitude: 41.403333
+    Longitude: 2.189444
+    Description: High-rise orbit and urban race
+    SpawnAltitudeMeters: 500

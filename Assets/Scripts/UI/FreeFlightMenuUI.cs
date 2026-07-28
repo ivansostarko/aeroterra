@@ -81,6 +81,19 @@ namespace AeroTerra.UI
         private TMPro.TextMeshProUGUI _altitudeLabel;
         private float _spawnAltitudeM;
 
+        // Flying Conditions' own sub-tab bar — GENERAL (Sky/Weather/Wind/3D/Altitude,
+        // the screen's original content) vs. SPAWN LOCATION (new). Same horizontal
+        // tab-button + int-field + full-rebuild idiom SettingsUI's nested Flying
+        // Conditions sub-tabs already established.
+        private const int CondGeneral = 0, CondSpawnLocation = 1;
+        private static readonly string[] ConditionsTabNames = { "GENERAL", "SPAWN LOCATION" };
+        private int _conditionsTab;
+        /// <summary>null = the map's own default Latitude/Longitude/SpawnAltitudeMeters.</summary>
+        private MapDefinition.SpawnLocation _pickedSpawnLocation;
+        /// <summary>Non-null while the SPAWN LOCATION tab's map-preview modal is open —
+        /// see BuildMapPreviewOverlay/PreviewSpawnLocation/CloseMapPreview.</summary>
+        private MapDefinition.SpawnLocation _previewingLocation;
+
         public void Open(System.Action onBack)
         {
             _onBack = onBack;
@@ -104,7 +117,9 @@ namespace AeroTerra.UI
         {
             if (_root == null) return;
             var im = AeroTerra.Input.InputManager.Instance;
-            if (im != null && im.PauseAction.WasPressedThisFrame()) GoBack();
+            if (im == null || !im.PauseAction.WasPressedThisFrame()) return;
+            if (_previewingLocation != null) CloseMapPreview();
+            else GoBack();
         }
 
         private void GoBack()
@@ -125,6 +140,11 @@ namespace AeroTerra.UI
             Clear();
             _screen = Screen.Map;
             _root = Panel_(Canvas.transform, "FreeFlight_Maps", Bg, Vector2.zero, Vector2.one);
+
+            _root.gameObject.AddComponent<BackgroundSlider>().Init(_root,
+                new[] { "Images/Backgrounds/main-menu/slider_11" });
+            Panel_(_root, "Scrim", new Color(0f, 0f, 0f, 0.55f), Vector2.zero, Vector2.one);
+
             BackButton_(_root, new Vector2(0.02f, 0.90f), new Vector2(0.075f, 0.965f), GoBack);
             Label(_root, "FREE FLIGHT — SELECT AREA", 44, new Vector2(0.10f, 0.88f), new Vector2(0.95f, 0.97f),
                   TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
@@ -524,12 +544,33 @@ namespace AeroTerra.UI
         }
 
         // ---------- Screen 3: flying conditions ----------
+
+        /// <summary>Entry point, called once from BuildDetailsPanel's FLY button — does
+        /// the one-time reset (spawn altitude back to the map's default, no spawn
+        /// location preset picked, GENERAL sub-tab active) then hands off to
+        /// RefreshConditionsScreen for the actual drawing. Sub-tab switches and spawn
+        /// location picks call RefreshConditionsScreen directly (not this), same split
+        /// BuildDroneScreen/RefreshDroneScreen already use, so they don't stomp
+        /// in-progress choices like the altitude slider on every rebuild.</summary>
         private void BuildConditionsScreen()
         {
             CloseGallery();
-            Clear();
             _screen = Screen.Conditions;
+            _spawnAltitudeM = Mathf.Clamp((float)_pickedMap.SpawnAltitudeMeters, AltitudeMinM, AltitudeMaxM);
+            _pickedSpawnLocation = null;
+            _conditionsTab = CondGeneral;
+            RefreshConditionsScreen();
+        }
+
+        private void RefreshConditionsScreen()
+        {
+            Clear();
             _root = Panel_(Canvas.transform, "FreeFlight_Conditions", Bg, Vector2.zero, Vector2.one);
+
+            _root.gameObject.AddComponent<BackgroundSlider>().Init(_root,
+                new[] { "Images/Backgrounds/main-menu/slider_12" });
+            Panel_(_root, "Scrim", new Color(0f, 0f, 0f, 0.55f), Vector2.zero, Vector2.one);
+
             BackButton_(_root, new Vector2(0.02f, 0.90f), new Vector2(0.075f, 0.965f), GoBack);
 
             string droneName = _pickedCustom != null ? _pickedCustom.CustomName : _pickedSpec.DisplayName;
@@ -537,10 +578,94 @@ namespace AeroTerra.UI
                   new Vector2(0.10f, 0.90f), new Vector2(0.95f, 0.98f), TextMain,
                   TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
 
+            for (int i = 0; i < ConditionsTabNames.Length; i++)
+            {
+                int idx = i;
+                float tx0 = 0.22f + i * 0.285f, tx1 = tx0 + 0.27f;
+                Button_(_root, ConditionsTabNames[i], new Vector2(tx0, 0.825f), new Vector2(tx1, 0.885f),
+                        () => { _conditionsTab = idx; RefreshConditionsScreen(); },
+                        _conditionsTab == i ? Accent : PanelAlt, 16);
+            }
+
             var s = GameManager.Instance.Settings;
             var content = Panel_(_root, "ConditionsContent", Color.clear,
-                                 new Vector2(0.22f, 0.20f), new Vector2(0.78f, 0.86f));
+                                 new Vector2(0.22f, 0.20f), new Vector2(0.78f, 0.80f));
 
+            if (_conditionsTab == CondSpawnLocation) { BuildSpawnLocationTab(content); }
+            else { BuildGeneralConditionsTab(content, s); }
+
+            Button_(_root, "FLY", new Vector2(0.40f, 0.10f), new Vector2(0.60f, 0.18f), () =>
+            {
+                GameManager.Instance.SelectedSpawnAltitudeOverride = _spawnAltitudeM;
+                GameManager.Instance.SelectedSpawnLocationOverride = _pickedSpawnLocation;
+                GameManager.Instance.StartFreeFlight(_pickedMap, _pickedSpec, _pickedCustom);
+            }, Accent, 30);
+
+            if (_previewingLocation != null) BuildMapPreviewOverlay();
+        }
+
+        /// <summary>Static "where is this?" preview for one spawn location — a stylized
+        /// radar-style plot (map's own origin at center, this location marked at its
+        /// real flat-earth offset — MapDefinition.FlatOffsetMeters, same math the HUD
+        /// minimap/Landmarks already use) rather than a live map, since this screen has
+        /// no drone/Cesium world to show an actual 3D view of. Same staged-field +
+        /// rebuild modal pattern as MediaUI's image lightbox: backdrop click / ✕ / Esc
+        /// all close it via CloseMapPreview.</summary>
+        private void BuildMapPreviewOverlay()
+        {
+            var loc = _previewingLocation;
+            var overlay = Panel_(_root, "MapPreview", new Color(0f, 0f, 0f, 0.82f), Vector2.zero, Vector2.one);
+            var backdropBtn = overlay.gameObject.AddComponent<Button>();
+            backdropBtn.transition = Selectable.Transition.None;
+            backdropBtn.onClick.AddListener(CloseMapPreview);
+
+            var box = Panel_(overlay, "Box", Panel, new Vector2(0.28f, 0.10f), new Vector2(0.72f, 0.90f));
+            box.gameObject.AddComponent<Button>().transition = Selectable.Transition.None; // swallows clicks on the box itself
+
+            Label(box, loc.Name.ToUpperInvariant(), 24, new Vector2(0.06f, 0.91f), new Vector2(0.94f, 0.975f),
+                  TextMain, TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+            Label(box, $"{_pickedMap.DisplayName} · {loc.Latitude:0.000000}°, {loc.Longitude:0.000000}° · ALT {loc.SpawnAltitudeMeters:0} m",
+                  12, new Vector2(0.06f, 0.87f), new Vector2(0.94f, 0.905f), TextDim, TMPro.TextAlignmentOptions.Center);
+
+            var plot = Panel_(box, "Plot", new Color(0.04f, 0.07f, 0.10f, 1f), new Vector2(0.08f, 0.30f), new Vector2(0.92f, 0.855f));
+            Panel_(plot, "GridH", new Color(1, 1, 1, 0.07f), new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0, -1), new Vector2(0, 1));
+            Panel_(plot, "GridV", new Color(1, 1, 1, 0.07f), new Vector2(0.5f, 0f), new Vector2(0.5f, 1f), new Vector2(-1, 0), new Vector2(1, 0));
+
+            Vector2 offsetM = MapDefinition.FlatOffsetMeters(loc.Latitude, loc.Longitude, _pickedMap.Latitude, _pickedMap.Longitude);
+            float rangeM = Mathf.Max(600f, offsetM.magnitude * 1.4f);
+            Vector2 frac = new Vector2(
+                Mathf.Clamp(offsetM.x / rangeM, -0.42f, 0.42f),
+                Mathf.Clamp(offsetM.y / rangeM, -0.42f, 0.42f));
+            Vector2 markerAnchor = new Vector2(0.5f + frac.x, 0.5f + frac.y);
+
+            if (offsetM.sqrMagnitude > 0.01f)
+            {
+                // Thin line from the map's origin to this location's marker.
+                var lineGo = new GameObject("Line", typeof(RectTransform), typeof(Image));
+                lineGo.transform.SetParent(plot, false);
+                var lineRt = (RectTransform)lineGo.transform;
+                lineRt.anchorMin = new Vector2(0.5f, 0.5f); lineRt.anchorMax = new Vector2(0.5f, 0.5f);
+                lineRt.pivot = new Vector2(0f, 0.5f);
+                Vector2 plotPxSize = plot.rect.size;
+                Vector2 deltaPx = new Vector2(frac.x * plotPxSize.x, frac.y * plotPxSize.y);
+                lineRt.sizeDelta = new Vector2(deltaPx.magnitude, 2f);
+                lineRt.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(deltaPx.y, deltaPx.x) * Mathf.Rad2Deg);
+                lineGo.GetComponent<Image>().color = new Color(AccentWarn.r, AccentWarn.g, AccentWarn.b, 0.5f);
+            }
+
+            Panel_(plot, "OriginDot", Accent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-5, -5), new Vector2(5, 5));
+            Panel_(plot, "LocationDot", AccentWarn, markerAnchor, markerAnchor, new Vector2(-7, -7), new Vector2(7, 7));
+
+            Label(box, $"●  {_pickedMap.DisplayName.ToUpperInvariant()}      ●  {loc.Name.ToUpperInvariant()}", 12,
+                  new Vector2(0.06f, 0.24f), new Vector2(0.94f, 0.285f), TextDim, TMPro.TextAlignmentOptions.Center);
+            Label(box, loc.Description, 13, new Vector2(0.06f, 0.145f), new Vector2(0.94f, 0.225f),
+                  TextDim, TMPro.TextAlignmentOptions.Center);
+
+            Button_(box, "CLOSE", new Vector2(0.34f, 0.03f), new Vector2(0.66f, 0.10f), CloseMapPreview, PanelAlt, 16);
+        }
+
+        private void BuildGeneralConditionsTab(RectTransform content, SettingsData s)
+        {
             Label(content, "SKY", 20, new Vector2(0f, 0.90f), new Vector2(0.4f, 0.97f),
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
             OptionRow(content, new[] { SkyPreset.Day, SkyPreset.Dawn, SkyPreset.Dusk, SkyPreset.Night },
@@ -603,26 +728,159 @@ namespace AeroTerra.UI
                   Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
             _altitudeLabel = Label(content, "", 16, new Vector2(0.6f, 0.32f), new Vector2(1f, 0.39f),
                                    TextMain, TMPro.TextAlignmentOptions.Right, TMPro.FontStyles.Bold);
-            _spawnAltitudeM = Mathf.Clamp((float)_pickedMap.SpawnAltitudeMeters, AltitudeMinM, AltitudeMaxM);
             Slider_(content, new Vector2(0f, 0.23f), new Vector2(1f, 0.30f),
                 Mathf.InverseLerp(AltitudeMinM, AltitudeMaxM, _spawnAltitudeM),
-                v => { _spawnAltitudeM = Mathf.Lerp(AltitudeMinM, AltitudeMaxM, v); RefreshAltitudeLabel(); });
+                v =>
+                {
+                    _spawnAltitudeM = Mathf.Lerp(AltitudeMinM, AltitudeMaxM, v);
+                    // Hand-adjusting the slider is an explicit override of whatever a
+                    // spawn-location preset set — deselect it (falls back to MAP DEFAULT
+                    // position, keeping the player's own altitude) rather than silently
+                    // keeping a preset's name/coordinates paired with a different altitude.
+                    _pickedSpawnLocation = null;
+                    RefreshAltitudeLabel();
+                });
             RefreshAltitudeLabel();
 
             _conditionsSummary = Label(content, "", 16, new Vector2(0f, 0.03f), new Vector2(1f, 0.15f),
                                        TextDim, TMPro.TextAlignmentOptions.Center);
             RefreshConditionsSummary();
-
-            Button_(_root, "FLY", new Vector2(0.40f, 0.10f), new Vector2(0.60f, 0.18f), () =>
-            {
-                GameManager.Instance.SelectedSpawnAltitudeOverride = _spawnAltitudeM;
-                GameManager.Instance.StartFreeFlight(_pickedMap, _pickedSpec, _pickedCustom);
-            }, Accent, 30);
         }
 
         private void RefreshAltitudeLabel()
         {
             if (_altitudeLabel != null) _altitudeLabel.text = $"{_spawnAltitudeM:0} m";
+        }
+
+        /// <summary>SPAWN LOCATION sub-tab: a scrollable list of the picked map's named
+        /// SpawnLocation presets (plus a MAP DEFAULT row for the map's own origin),
+        /// each showing its description, real-world coordinates and recommended
+        /// altitude — click one to launch from there instead of the map's default
+        /// point. Scrolls (UIBuilder.ScrollList, same primitive the drone sidebar lists
+        /// use) since a map's preset count isn't capped to whatever fits on screen.</summary>
+        private void BuildSpawnLocationTab(RectTransform content)
+        {
+            Label(content, "SPAWN LOCATION", 20, new Vector2(0f, 0.90f), new Vector2(0.7f, 0.97f),
+                  Accent, TMPro.TextAlignmentOptions.Left, TMPro.FontStyles.Bold);
+            Label(content, "Pick a real landmark to launch from — selecting one also sets its recommended spawn altitude.",
+                  12, new Vector2(0f, 0.855f), new Vector2(1f, 0.895f), TextDim, TMPro.TextAlignmentOptions.Left);
+
+            var locations = _pickedMap.SpawnLocations ?? System.Array.Empty<MapDefinition.SpawnLocation>();
+            int rowCount = locations.Length + 1; // +1 for the MAP DEFAULT row
+
+            const float rowH = 92f, gap = 8f, scrollbarW = 0.014f;
+            var (viewport, listContent, scrollRect) = ScrollList(content, "SpawnLocations",
+                new Vector2(0f, 0f), new Vector2(1f - scrollbarW, 0.83f));
+
+            float totalH = rowCount * rowH + Mathf.Max(0, rowCount - 1) * gap;
+            listContent.sizeDelta = new Vector2(0f, totalH);
+
+            BuildSpawnLocationRow(listContent, 0, rowH, "MAP DEFAULT",
+                $"{_pickedMap.DisplayName}'s own default launch point.",
+                _pickedMap.Latitude, _pickedMap.Longitude, _pickedMap.SpawnAltitudeMeters,
+                _pickedSpawnLocation == null, () => SelectSpawnLocation(null), null);
+
+            for (int i = 0; i < locations.Length; i++)
+            {
+                var loc = locations[i];
+                BuildSpawnLocationRow(listContent, i + 1, rowH, loc.Name.ToUpperInvariant(), loc.Description,
+                    loc.Latitude, loc.Longitude, loc.SpawnAltitudeMeters,
+                    _pickedSpawnLocation == loc, () => SelectSpawnLocation(loc), () => PreviewSpawnLocation(loc));
+            }
+
+            float maxScrollY = Mathf.Max(0f, totalH - viewport.rect.height);
+            if (maxScrollY > 0f)
+            {
+                var scrollbar = VScrollbar_(content, new Vector2(1f - scrollbarW + 0.002f, 0f), new Vector2(1f, 0.83f));
+                scrollRect.verticalScrollbar = scrollbar;
+                scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            }
+        }
+
+        private void SelectSpawnLocation(MapDefinition.SpawnLocation loc)
+        {
+            AudioManager.Instance?.PlayButtonClick();
+            _pickedSpawnLocation = loc;
+            double altM = loc != null ? loc.SpawnAltitudeMeters : _pickedMap.SpawnAltitudeMeters;
+            _spawnAltitudeM = Mathf.Clamp((float)altM, AltitudeMinM, AltitudeMaxM);
+            RefreshConditionsScreen();
+        }
+
+        /// <summary>Opens BuildMapPreviewOverlay for one named spawn location — a
+        /// separate action from SelectSpawnLocation (clicking a row's own dedicated MAP
+        /// button, not the row itself), so browsing previews never changes what's
+        /// actually picked for the flight.</summary>
+        private void PreviewSpawnLocation(MapDefinition.SpawnLocation loc)
+        {
+            AudioManager.Instance?.PlayButtonClick();
+            _previewingLocation = loc;
+            RefreshConditionsScreen();
+        }
+
+        private void CloseMapPreview()
+        {
+            _previewingLocation = null;
+            RefreshConditionsScreen();
+        }
+
+        private static void BuildSpawnLocationRow(Transform content, int rowIndex, float rowH,
+            string name, string description, double lat, double lon, double altM, bool selected,
+            System.Action onClick, System.Action onPreview)
+        {
+            float topY = rowIndex * (rowH + 8f);
+            var card = Panel_(content, "Spawn_" + rowIndex, selected ? PanelAlt : Panel,
+                              new Vector2(0f, 1f), new Vector2(1f, 1f),
+                              new Vector2(0f, -(topY + rowH)), new Vector2(0f, -topY));
+            Panel_(card, "Stripe", selected ? Accent : new Color(1, 1, 1, 0.08f), Vector2.zero, new Vector2(0.008f, 1f));
+
+            Label(card, name, 16, new Vector2(0.03f, 0.58f), new Vector2(0.65f, 0.92f),
+                  selected ? TextMain : TextDim, TMPro.TextAlignmentOptions.MidlineLeft, TMPro.FontStyles.Bold);
+            Label(card, description, 12, new Vector2(0.03f, 0.30f), new Vector2(0.65f, 0.56f),
+                  selected ? Accent : TextDim, TMPro.TextAlignmentOptions.MidlineLeft);
+            if (selected)
+                Label(card, "✓  SELECTED", 11, new Vector2(0.03f, 0.06f), new Vector2(0.35f, 0.24f),
+                      Accent, TMPro.TextAlignmentOptions.MidlineLeft, TMPro.FontStyles.Bold);
+
+            // Narrowed from the old 0.65-0.97 span to make room for the MAP preview
+            // button at the row's far right edge, below.
+            Label(card, $"{lat:0.000000}°, {lon:0.000000}°", 11, new Vector2(0.65f, 0.55f), new Vector2(0.88f, 0.90f),
+                  TextDim, TMPro.TextAlignmentOptions.MidlineRight);
+            Label(card, $"ALT {altM:0} m", 14, new Vector2(0.65f, 0.14f), new Vector2(0.88f, 0.50f),
+                  selected ? Accent : TextMain, TMPro.TextAlignmentOptions.MidlineRight, TMPro.FontStyles.Bold);
+
+            var btn = card.gameObject.AddComponent<Button>();
+            btn.targetGraphic = card.GetComponent<Image>();
+            var colors = btn.colors;
+            colors.highlightedColor = new Color(1.15f, 1.15f, 1.15f, 1f);
+            colors.pressedColor = Accent;
+            btn.colors = colors;
+            btn.onClick.AddListener(() => onClick?.Invoke());
+            var trigger = card.gameObject.AddComponent<EventTrigger>();
+            var hover = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+            hover.callback.AddListener(_ => AudioManager.Instance?.PlayButtonHover());
+            trigger.triggers.Add(hover);
+
+            // Dedicated MAP preview button — a separate clickable child so it doesn't
+            // also trigger the row's own select button above.
+            if (onPreview != null)
+            {
+                var previewBtn = Panel_(card, "PreviewBtn", new Color(1, 1, 1, 0.10f),
+                                        new Vector2(0.905f, 0.14f), new Vector2(0.995f, 0.90f));
+                Label(previewBtn, "MAP", 10, Vector2.zero, Vector2.one, TextMain,
+                      TMPro.TextAlignmentOptions.Center, TMPro.FontStyles.Bold);
+
+                var pBtn = previewBtn.gameObject.AddComponent<Button>();
+                pBtn.targetGraphic = previewBtn.GetComponent<Image>();
+                var pColors = pBtn.colors;
+                pColors.highlightedColor = new Color(1.3f, 1.3f, 1.3f, 1f);
+                pColors.pressedColor = Accent;
+                pBtn.colors = pColors;
+                pBtn.onClick.AddListener(() => onPreview());
+                var pTrigger = previewBtn.gameObject.AddComponent<EventTrigger>();
+                var pHover = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+                pHover.callback.AddListener(_ => AudioManager.Instance?.PlayButtonHover());
+                pTrigger.triggers.Add(pHover);
+            }
         }
 
         /// <summary>Same non-interactive wind readout as Settings ▸ Flying Conditions
@@ -643,8 +901,9 @@ namespace AeroTerra.UI
             if (_conditionsSummary == null) return;
             var s = GameManager.Instance.Settings;
             string droneName = _pickedCustom != null ? _pickedCustom.CustomName : _pickedSpec.DisplayName;
+            string place = _pickedSpawnLocation != null ? $"{_pickedSpawnLocation.Name}, {_pickedMap.DisplayName}" : _pickedMap.DisplayName;
             _conditionsSummary.text =
-                $"Departing {_pickedMap.DisplayName} in the {droneName} — {s.Weather} skies, {s.Sky} time-of-day.";
+                $"Departing {place} in the {droneName} — {s.Weather} skies, {s.Sky} time-of-day.";
         }
     }
 }
